@@ -6,25 +6,21 @@ Stage 1 of moving this app onto ERPNext's native `Project` and `Task` doctypes.
 Every field the BP model carries that native Project/Task does not, added as a
 Custom Field on the native doctype. Purely additive and idempotent: it creates
 nothing that already exists, changes no behaviour, and removes nothing. Nothing
-in the app reads these yet — re-keying the ~624 `BP Task`/`BP Project`
-references is a later, separately reviewable stage.
+in the app reads these yet — re-keying the `BP Task`/`BP Project` references is
+a later, separately reviewable stage.
 
-Two deliberate choices:
+Prefer the native field
+    Where native Project/Task already has a field meaning the same thing, we
+    use it rather than adding a parallel column. NATIVE_FIELD_MAP below records
+    those, and is the mapping stage 3's read/write paths follow. Duplicating
+    them would give every Task two titles and two identifiers, which is exactly
+    how two sources of truth drift apart.
 
 `custom_` prefix
     Frappe's convention for an app adding fields to another app's doctype, and
     the app's existing fixtures already follow it (`custom_bp_task` on
     Timesheet Detail). Without it, a future ERPNext release adding a field of
     the same name would collide on a core doctype.
-
-Only BP Project / BP Task are retargeted
-    Of the 54 BP doctypes, exactly these two are being replaced by native
-    counterparts. The other 52 — BP Sprint, BP Epic, BP Milestone, BP Team,
-    BP Task Assignee and the rest — remain, and become satellites linked *from*
-    native Project/Task. So a Link whose target is `BP Project` becomes
-    `Project` (see custom_parent_project) and `BP Task` becomes `Task` (see
-    custom_recurrence_source), while every other BP target is left alone on
-    purpose.
 
 No `reqd`
     A Custom Field must never be mandatory on a doctype another app owns. The
@@ -36,10 +32,13 @@ No `reqd`
     app enforces it on its own write path in a later stage; it is not a schema
     constraint on a shared doctype.
 
-    Note also that `custom_title` (Task) and `custom_key`/`custom_task_key`
-    overlap native `subject` and native naming. Whether those become mappings
-    onto the native fields rather than separate columns is a stage-3 decision,
-    once the read/write paths move over.
+Only BP Project / BP Task are retargeted
+    Of the 54 BP doctypes, exactly these two are being replaced by native
+    counterparts. The other 52 — BP Sprint, BP Epic, BP Milestone, BP Team,
+    BP Task Assignee and the rest — remain, and become satellites linked *from*
+    native Project/Task. So a Link whose target is `BP Project` becomes
+    `Project` (see custom_parent_project) and `BP Task` becomes `Task` (see
+    custom_recurrence_source), while every other BP target is left alone.
 
 No `insert_after`: Frappe appends, and field layout is the desk-UI stage's job.
 """
@@ -47,6 +46,33 @@ No `insert_after`: Frappe appends, and field layout is the desk-UI stage's job.
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
+
+# BP field name (unprefixed) -> the native Project/Task field that already
+# means the same thing. These are deliberately NOT added as custom fields;
+# stage 3 reads and writes the native field instead. `None` means the BP field
+# is simply meaningless once native Project is the model.
+NATIVE_FIELD_MAP = {
+    "Project": {
+        "description": 'notes',
+        "client": 'customer',
+        "start_date": 'expected_start_date',
+        "target_end_date": 'expected_end_date',
+        "budget_amount": 'estimated_costing',
+        "source_sales_order": 'sales_order',
+        "template_used": 'project_template',
+        "category": 'project_type',
+        "erpnext_project": None,
+    },
+    "Task": {
+        "title": 'subject',
+        "task_type": 'type',
+        "due_date": 'exp_end_date',
+        "start_date": 'exp_start_date',
+        "estimated_hours": 'expected_time',
+        "actual_hours": 'actual_time',
+        "started_on": 'act_start_date',
+    },
+}
 
 CUSTOM_FIELDS = {
     "Project": [
@@ -58,20 +84,13 @@ CUSTOM_FIELDS = {
         {"fieldname": "custom_visibility", "label": 'Visibility', "fieldtype": 'Select', "options": 'workspace\nprivate\nteam', "default": 'workspace'},
         {"fieldname": "custom_parent_project", "label": 'Parent Project (WBS)', "fieldtype": 'Link', "options": 'Project', "description": 'For project hierarchy / WBS breakdown. Child projects inherit visibility from parent.'},
         {"fieldname": "custom_team", "label": 'Team', "fieldtype": 'Link', "options": 'BP Team'},
-        {"fieldname": "custom_category", "label": 'Category', "fieldtype": 'Data'},
-        {"fieldname": "custom_template_used", "label": 'Template Used', "fieldtype": 'Data', "read_only": 1, "hidden": 1},
-        {"fieldname": "custom_description", "label": 'Description', "fieldtype": 'Text Editor'},
         {"fieldname": "custom_lead", "label": 'Project Lead', "fieldtype": 'Link', "options": 'User'},
         {"fieldname": "custom_default_assignee", "label": 'Default Assignee', "fieldtype": 'Link', "options": 'User'},
         {"fieldname": "custom_issue_counter", "label": 'Issue Counter', "fieldtype": 'Int', "default": '0', "read_only": 1, "hidden": 1},
         {"fieldname": "custom_schema_version", "label": 'Schema Version', "fieldtype": 'Int', "default": '1', "read_only": 1, "hidden": 1},
-        {"fieldname": "custom_client", "label": 'Client', "fieldtype": 'Link', "options": 'Customer', "depends_on": "eval:doc.project_type != 'internal'"},
         {"fieldname": "custom_currency", "label": 'Currency', "fieldtype": 'Data', "default": 'INR'},
-        {"fieldname": "custom_budget_amount", "label": 'Budget Amount', "fieldtype": 'Float', "precision": '2', "depends_on": "eval:doc.project_type == 'fixed'"},
         {"fieldname": "custom_hourly_rate", "label": 'Hourly Rate', "fieldtype": 'Float', "precision": '2', "depends_on": "eval:doc.project_type == 'tm' || doc.project_type == 'retainer'"},
         {"fieldname": "custom_retainer_hours", "label": 'Monthly Retainer Hours', "fieldtype": 'Int', "depends_on": "eval:doc.project_type == 'retainer'"},
-        {"fieldname": "custom_start_date", "label": 'Start Date', "fieldtype": 'Date'},
-        {"fieldname": "custom_target_end_date", "label": 'Target End Date', "fieldtype": 'Date'},
         {"fieldname": "custom_cycle_label", "label": 'Work Cycle Label', "fieldtype": 'Data', "default": 'Sprint', "description": 'What do you call a time-boxed work cycle? Sprint, Production Run, Phase, Campaign, Iteration, etc.'},
         {"fieldname": "custom_effort_label", "label": 'Effort Unit Label', "fieldtype": 'Data', "default": 'Story Points', "description": 'What unit do you estimate work in? Story Points, Hours, Units, Batch Size, Billable Days, etc.'},
         {"fieldname": "custom_workflow_states", "label": 'Workflow States', "fieldtype": 'Long Text'},
@@ -85,26 +104,20 @@ CUSTOM_FIELDS = {
         {"fieldname": "custom_pinned_views", "label": 'Pinned Views', "fieldtype": 'Long Text', "description": 'Ordered view keys shown inline in the header tab strip; the rest live behind the overflow drawer. Null = default split (summary/board/list/gantt pinned).'},
         {"fieldname": "custom_default_view", "label": 'Default View', "fieldtype": 'Data', "default": 'summary'},
         {"fieldname": "custom_members", "label": 'Members', "fieldtype": 'Table', "options": 'BP Project Member'},
-        {"fieldname": "custom_erpnext_project", "label": 'ERPNext Project', "fieldtype": 'Link', "options": 'Project', "description": 'The real ERPNext Project this BP Project is wired to. The join key for every money surface (margin report, timesheets, profitability, invoice-ready) — see docs/AUDIT-PM-2026-07-11.md.'},
-        {"fieldname": "custom_source_sales_order", "label": 'Source Sales Order', "fieldtype": 'Link', "options": 'Sales Order', "read_only": 1, "description": 'Set when this project was created from a Sales Order (Phase 8C).'},
         {"fieldname": "custom_source_lead", "label": 'Source Lead', "fieldtype": 'Link', "options": 'Lead', "read_only": 1, "description": 'Set when this project was created from a Lead.'},
         {"fieldname": "custom_source_opportunity", "label": 'Source Opportunity', "fieldtype": 'Link', "options": 'Opportunity', "read_only": 1, "description": 'Set when this project was created from an Opportunity.'},
         {"fieldname": "custom_source_quotation", "label": 'Source Quotation', "fieldtype": 'Link', "options": 'Quotation', "read_only": 1, "description": 'Set when this project was created from a Quotation.'},
     ],
     "Task": [
-        {"fieldname": "custom_title", "label": 'Title', "fieldtype": 'Data', "in_list_view": 1},
         {"fieldname": "custom_task_key", "label": 'Task Key', "fieldtype": 'Data', "read_only": 1, "in_list_view": 1, "unique": 1},
         {"fieldname": "custom_sequence_no", "label": 'Sequence No', "fieldtype": 'Int', "read_only": 1, "hidden": 1, "description": 'Global monotonic sequence — stable internal identity independent of the display task_key. Assigned automatically at creation, never changed.'},
         {"fieldname": "custom_epic", "label": 'Epic', "fieldtype": 'Link', "options": 'BP Epic', "in_standard_filter": 1},
-        {"fieldname": "custom_task_type", "label": 'Task Type', "fieldtype": 'Data', "default": 'Task', "in_list_view": 1, "in_standard_filter": 1, "description": 'Validated dynamically against project issue_types'},
         {"fieldname": "custom_reporter", "label": 'Reporter', "fieldtype": 'Link', "options": 'Employee'},
         {"fieldname": "custom_assignees", "label": 'Assignees', "fieldtype": 'Table', "options": 'BP Task Assignee'},
         {"fieldname": "custom_labels", "label": 'Labels', "fieldtype": 'Long Text', "description": 'List of label IDs from project labels schema'},
         {"fieldname": "custom_story_points", "label": 'Story Points', "fieldtype": 'Int', "default": '0'},
         {"fieldname": "custom_actual_points", "label": 'Actual Points', "fieldtype": 'Int', "default": '0', "description": "Points it actually took, vs Story Points' estimate — filled in during/after the sprint for calibration."},
         {"fieldname": "custom_is_unplanned", "label": 'Unplanned', "fieldtype": 'Check', "default": '0', "description": 'Added to the sprint after it started, rather than during planning.'},
-        {"fieldname": "custom_due_date", "label": 'Due Date', "fieldtype": 'Date', "in_list_view": 1},
-        {"fieldname": "custom_start_date", "label": 'Start Date', "fieldtype": 'Date'},
         {"fieldname": "custom_planned_start", "label": 'Planned Start', "fieldtype": 'Date', "description": 'Scheduled start (the plan). Gantt/scheduling read this first and fall back to Start Date. Actual execution lives in started_on/completed_on.'},
         {"fieldname": "custom_planned_end", "label": 'Planned End', "fieldtype": 'Date', "description": 'Scheduled finish (the plan). Distinct from Due Date, which stays the commitment/deadline that drives reminders.'},
         {"fieldname": "custom_sprint", "label": 'Sprint', "fieldtype": 'Link', "options": 'BP Sprint', "in_standard_filter": 1},
@@ -119,11 +132,8 @@ CUSTOM_FIELDS = {
         {"fieldname": "custom_blocked_reason", "label": 'Blocked', "fieldtype": 'Select', "options": '\nWaiting for Client\nWaiting for Vendor\nWaiting for Approval\nTechnical Blocker\nResource Shortage', "description": 'Set a reason to mark the task blocked; clear to unblock. blocked_since / blocked_by are maintained automatically.'},
         {"fieldname": "custom_blocked_since", "label": 'Blocked Since', "fieldtype": 'Datetime', "read_only": 1, "description": 'When the task was last blocked — feeds the time-blocked project-health metric.'},
         {"fieldname": "custom_blocked_by", "label": 'Blocked By', "fieldtype": 'Link', "options": 'User', "read_only": 1, "description": 'The user who last marked this task blocked.'},
-        {"fieldname": "custom_estimated_hours", "label": 'Estimated Hours', "fieldtype": 'Float'},
-        {"fieldname": "custom_actual_hours", "label": 'Actual Hours', "fieldtype": 'Float', "read_only": 1, "description": 'Auto-calculated from time logs'},
         {"fieldname": "custom_billable", "label": 'Billable', "fieldtype": 'Check', "default": '0'},
         {"fieldname": "custom_needs_triage", "label": 'Needs Triage', "fieldtype": 'Check', "default": '0', "description": 'Flag for triage review. Previously defaulted to on for every task — existing rows can be bulk-cleared.'},
-        {"fieldname": "custom_started_on", "label": 'Started On', "fieldtype": 'Datetime', "read_only": 1, "hidden": 1},
         {"fieldname": "custom_resolution", "label": 'Resolution', "fieldtype": 'Select', "options": "\nDone\nWon't Do\nDuplicate\nCannot Reproduce\nObsolete", "description": 'Why the task was closed. Set automatically when moved to a completed status; cleared when reopened.'},
         {"fieldname": "custom_custom_field_values", "label": 'Custom Field Values', "fieldtype": 'Long Text', "hidden": 1, "description": 'Flat key-value map: {cf_id: value}. Managed by the SPA. Stored as JSON string.'},
         {"fieldname": "custom_sales_order", "label": 'Sales Order', "fieldtype": 'Link', "options": 'Sales Order'},

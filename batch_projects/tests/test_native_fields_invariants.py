@@ -12,7 +12,7 @@ Run with:
 
 from frappe.tests import UnitTestCase
 
-from batch_projects.setup.native_fields import CUSTOM_FIELDS
+from batch_projects.setup.native_fields import CUSTOM_FIELDS, NATIVE_FIELD_MAP
 
 # The two doctypes being replaced by native counterparts. Nothing we add to a
 # native doctype may point back at them.
@@ -84,3 +84,24 @@ class TestNativeFieldInvariants(UnitTestCase):
     def test_targets_only_the_two_native_doctypes(self):
         """Guards against a stray doctype key creeping into the spec."""
         self.assertEqual(set(CUSTOM_FIELDS), {"Project", "Task"})
+
+    def test_mapped_fields_are_not_also_added_as_custom_fields(self):
+        """A field mapped onto a native field must not also exist as a column.
+
+        Otherwise a Task carries two titles (custom_title and subject) and two
+        identifiers, and the pair drifts apart the first time anything writes
+        one and not the other. NATIVE_FIELD_MAP is the single record of which
+        BP field defers to which native field.
+        """
+        offenders = []
+        for doctype, mapping in NATIVE_FIELD_MAP.items():
+            present = {r["fieldname"] for r in CUSTOM_FIELDS.get(doctype, [])}
+            for bp_field in mapping:
+                if f"custom_{bp_field}" in present:
+                    offenders.append(f"{doctype}.custom_{bp_field}")
+        self.assertEqual(
+            offenders, [], f"mapped to a native field yet still added as a column: {offenders}"
+        )
+
+    def test_native_field_map_covers_only_the_two_native_doctypes(self):
+        self.assertEqual(set(NATIVE_FIELD_MAP), {"Project", "Task"})
