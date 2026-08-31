@@ -8,14 +8,14 @@
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "layout-dashboard",
    "indent": 0,
    "keep_closed": 0,
    "label": "Overview",
-   "link_type": "URL",
+   "link_type": "Workspace",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace"
+   "icon": "layout-dashboard",
+   "link_to": "Projects"
   },
   {
    "label": "Plan",
@@ -24,50 +24,62 @@
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "projects",
    "indent": 0,
    "keep_closed": 0,
    "label": "Projects",
-   "link_type": "URL",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/all"
+   "icon": "projects",
+   "link_to": "Project"
   },
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "briefcase-business",
    "indent": 0,
    "keep_closed": 0,
-   "label": "Portfolio",
+   "label": "Task Board",
    "link_type": "URL",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/portfolio"
+   "icon": "grid-2x2-check",
+   "url": "/desk/task/view/kanban/Projects Board"
   },
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "goal",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Task Tree",
+   "link_type": "URL",
+   "show_arrow": 0,
+   "type": "Link",
+   "icon": "list-tree",
+   "url": "/desk/task/view/tree"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Gantt",
+   "link_type": "URL",
+   "show_arrow": 0,
+   "type": "Link",
+   "icon": "calendar-days",
+   "url": "/desk/task/view/gantt"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
    "indent": 0,
    "keep_closed": 0,
    "label": "Goals",
-   "link_type": "URL",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/goals"
-  },
-  {
-   "child": 0,
-   "collapsible": 0,
-   "icon": "list-tree",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Project Tree",
-   "link_type": "URL",
-   "show_arrow": 0,
-   "type": "Link",
-   "url": "/workspace/projects/tree"
+   "icon": "goal",
+   "link_to": "BP Goal"
   },
   {
    "label": "Work",
@@ -76,50 +88,62 @@
   {
    "child": 0,
    "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Tasks",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link",
    "icon": "list-todo",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "My Tasks",
-   "link_type": "URL",
-   "show_arrow": 0,
-   "type": "Link",
-   "url": "/workspace/my-tasks"
+   "link_to": "Task"
   },
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "funnel",
    "indent": 0,
    "keep_closed": 0,
-   "label": "Triage",
-   "link_type": "URL",
+   "label": "Sprints",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/triage"
+   "icon": "calendar-check-2",
+   "link_to": "BP Sprint"
   },
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "grid-2x2-check",
    "indent": 0,
    "keep_closed": 0,
-   "label": "Workload",
-   "link_type": "URL",
+   "label": "Epics",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/workload"
+   "icon": "list",
+   "link_to": "BP Epic"
   },
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "calendar-clock",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Milestones",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link",
+   "icon": "clipboard-check",
+   "link_to": "BP Milestone"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
    "indent": 0,
    "keep_closed": 0,
    "label": "Timesheets",
-   "link_type": "URL",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/timesheets"
+   "icon": "calendar-clock",
+   "link_to": "Timesheet"
   },
   {
    "label": "Insight",
@@ -128,50 +152,62 @@
   {
    "child": 0,
    "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Project Summary",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link",
    "icon": "chart",
+   "link_to": "Project Summary"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Delayed Tasks Summary",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link",
+   "icon": "funnel",
+   "link_to": "Delayed Tasks Summary"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Timesheet Billing Summary",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link",
+   "icon": "circle-dollar-sign",
+   "link_to": "Timesheet Billing Summary"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Daily Timesheet Summary",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link",
+   "icon": "square-activity",
+   "link_to": "Daily Timesheet Summary"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
    "indent": 0,
    "keep_closed": 0,
    "label": "Dashboards",
-   "link_type": "URL",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/dashboards"
-  },
-  {
-   "child": 0,
-   "collapsible": 0,
-   "icon": "clipboard-check",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Reports",
-   "link_type": "URL",
-   "show_arrow": 0,
-   "type": "Link",
-   "url": "/workspace/reports"
-  },
-  {
-   "child": 0,
-   "collapsible": 0,
-   "icon": "circle-dollar-sign",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Margin",
-   "link_type": "URL",
-   "show_arrow": 0,
-   "type": "Link",
-   "url": "/workspace/margin"
-  },
-  {
-   "child": 0,
-   "collapsible": 0,
-   "icon": "square-activity",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Utilization",
-   "link_type": "URL",
-   "show_arrow": 0,
-   "type": "Link",
-   "url": "/workspace/utilization"
+   "icon": "layout-dashboard",
+   "link_to": "BP Dashboard"
   },
   {
    "label": "People",
@@ -180,78 +216,14 @@
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "users",
    "indent": 0,
    "keep_closed": 0,
    "label": "Teams",
-   "link_type": "URL",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/teams"
-  },
-  {
-   "child": 0,
-   "collapsible": 0,
-   "icon": "user",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "People",
-   "link_type": "URL",
-   "show_arrow": 0,
-   "type": "Link",
-   "url": "/workspace/people"
-  },
-  {
-   "label": "Records",
-   "type": "Section Break"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "icon": "projects",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "BP Project",
-   "link_to": "BP Project",
-   "link_type": "DocType",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "icon": "list-todo",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "BP Task",
-   "link_to": "BP Task",
-   "link_type": "DocType",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "icon": "calendar-check-2",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "BP Sprint",
-   "link_to": "BP Sprint",
-   "link_type": "DocType",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 0,
-   "collapsible": 1,
-   "icon": "list",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "BP Epic",
-   "link_to": "BP Epic",
-   "link_type": "DocType",
-   "show_arrow": 0,
-   "type": "Link"
+   "icon": "users",
+   "link_to": "BP Team"
   },
   {
    "label": "Settings",
@@ -260,14 +232,26 @@
   {
    "child": 0,
    "collapsible": 0,
-   "icon": "settings",
    "indent": 0,
    "keep_closed": 0,
    "label": "Workspace Settings",
-   "link_type": "URL",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link",
-   "url": "/workspace/settings"
+   "icon": "settings",
+   "link_to": "BP Workspace Settings"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Projects Settings",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link",
+   "icon": "settings",
+   "link_to": "Projects Settings"
   }
  ],
  "module": "Batch Projects",
