@@ -11,14 +11,27 @@ app_license = "AGPL-3.0"
 # it exactly this way for the same reason.
 from . import __version__ as app_version
 
-add_to_apps_screen = [
-    {
-        "name": "batch_projects",
-        "logo": "/assets/batch_projects/images/bp-logo-new.svg",
-        "title": "Projects",
-        "route": "/workspace",
-    }
-]
+# No `add_to_apps_screen`, deliberately.
+#
+# This app is not a separate destination any more — it IS ERPNext's Projects
+# module, reached through the Projects workspace on the desk. The entry it used
+# to declare pointed at `/workspace`, the Vue SPA route that is being removed.
+#
+# Removing it also fixes a real, site-wide side effect of titling the app
+# "Projects". frappe's create_desktop_icons_from_installed_apps() labels an
+# app's Desktop Icon with `app_title`, and Desktop Icon autonames `field:label`
+# — but its duplicate guard checks (label, icon_type="App") while the primary
+# key is `label` alone. ERPNext already owns a Desktop Icon named "Projects"
+# with icon_type="Link" (auto-generated from its Projects *Workspace*), so the
+# guard misses it and the insert raises IntegrityError. That exception is caught
+# one level up in frappe.utils.install.auto_generate_icons_and_sidebar, which
+# aborts the whole block — so create_desktop_icons_from_workspace() never runs
+# and workspace icons stop being generated for EVERY app on the site.
+#
+# Confirmed on a live v16 site: install printed
+# `Error creating icons ('Desktop Icon', 'Projects', IntegrityError(1062, ...))`
+# and afterwards only 5 of the installed apps had an icon_type="App" icon.
+# With no add_to_apps_screen the icon is never attempted, so nothing collides.
 
 # app_include_js = ["/assets/batch_projects/js/batch_projects.js"]
 
@@ -60,17 +73,20 @@ fixtures = [
     ]]},
 ]
 
-# BatchProjects replaces ERPNext's stock Project/Task list views — the SPA is
-# the default Projects experience, so every route into the desk lists
-# (workspace cards, awesome-bar, pasted /desk/project links) redirects into it.
-# `?desk=1` loads the stock list anyway; see the JS for the escape hatch.
+# Jira-shaped navigation on ERPNext's own Project/Task, using v16 desk views.
+# The SPA is being retired, so the desk lists are the real destination now
+# rather than something to redirect out of — the earlier redirect into
+# /workspace is gone.
 #
-# One file for both doctypes on purpose: Frappe only loads the files
-# registered for the doctype being rendered, so a shared helper cannot live in
-# a Project-only file and still exist on the Task list.
+# Opening a project goes to its task board (Jira's default), with the form one
+# click away. Hierarchy needs nothing built: Task is `is_tree: 1` on
+# parent_task, so the native Tree view already renders epics -> stories ->
+# sub-tasks level by level.
+doctype_js = {
+    "Project": "public/js/project_jira.js",
+}
 doctype_list_js = {
-    "Project": "public/js/erpnext_projects_redirect.js",
-    "Task": "public/js/erpnext_projects_redirect.js",
+    "Project": "public/js/project_jira.js",
 }
 
 # Hooks
@@ -80,7 +96,10 @@ after_install = "batch_projects.setup.install.after_install"
 # migrate` re-imports it from erpnext's JSON and reverts our override every
 # run. after_migrate fires after that sync, which is the only place the
 # re-point survives an upgrade. Idempotent — see the module docstring.
-after_migrate = ["batch_projects.setup.projects_module.override_erpnext_projects_module"]
+after_migrate = [
+    "batch_projects.setup.projects_module.override_erpnext_projects_module",
+    "batch_projects.setup.jira_workspace.setup_jira_workspace",
+]
 
 # Data-layer access control — closes the generic-REST bypass and enforces
 # project `visibility`. See batch_projects/permissions.py.

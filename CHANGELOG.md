@@ -208,6 +208,30 @@ module in ERPNext.
 
 ## [Unreleased]
 
+### Native-doctype migration (in progress)
+
+Moving the app off its parallel `BP Project`/`BP Task` model onto ERPNext's
+native `Project`/`Task`, and onto the v16 desk UI. Staged so the tree stays
+working at every point:
+
+1. **Additive Custom Fields** *(this change)* — the 40 Project / 47 Task fields
+   the BP model carries that native Project/Task lack, added as `custom_`-
+   prefixed Custom Fields via `setup/native_fields.py`. Idempotent, wired to
+   `after_install` and a patch. **Nothing reads them yet**, so behaviour is
+   unchanged. Only `BP Project`/`BP Task` link targets are retargeted to
+   `Project`/`Task`; the other 52 BP doctypes stay and become satellites.
+2. v16 desk UI on native doctypes (Workspace, Sidebar, Kanban, Gantt, lists),
+   which also reverts the `doctype_list_js` redirect.
+3. Re-key the ~624 `BP Task`/`BP Project` references, with a data migration.
+   Billing and the permission boundary live here.
+4. Remove the Vue SPA.
+
+Not yet resolved: stage 4 drops SPA-only surfaces with no desk equivalent
+(Draw, public intake forms, share links, portfolio, triage) unless each is
+rebuilt. Adding ~87 fields to `Project`/`Task` is also site-wide and visible to
+every other app touching those doctypes.
+
+
 - Sprint Mode toggle (project-level setting)
 - `api/board.py` decomposition into focused modules
 - `TaskDetail.vue` composable extraction

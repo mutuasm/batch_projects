@@ -574,3 +574,91 @@ def bp_user_owned_has_permission(doc, user=None, permission_type=None):
     if access.is_instance_admin(user) or access.is_workspace_admin(user):
         return True
     return doc.get("user") == user
+
+
+# ─── NATIVE Project / Task SCOPING ───────────────────────────────────────────
+#
+# Stage 3 of the native-doctype migration. The BP model's visibility rule is
+# "you see the projects you are a member of". Native Project and Task are
+# shared with the rest of the site, so applying that rule to them directly
+# would have consequences the BP doctypes never had:
+#
+#   * `Task` is readable today by `Projects User` and `HR Manager`, and HRMS
+#     reads it for timesheet/leave flows. `Project` is readable by `Desk User`,
+#     `Projects Manager` and `Projects User`. A blanket membership filter hides
+#     every row from all of them.
+#
+#   * Scoping per *user* is not enough either. If a Projects Manager is added
+#     to a single BP project, a user-level rule would suddenly hide every other
+#     project on the site from them — punishing them for joining one project.
+#
+# So the fallback is per *project*, not just per user: a project is only scoped
+# by membership once it is actually BP-managed, which `custom_visibility`
+# records (BP-created projects set it; a plain ERPNext project leaves it
+# empty). Everything else keeps stock ERPNext behaviour.
+#
+# NOT wired into hooks yet — see the module's stage-3 notes. Activating these
+# changes site-wide access, so it lands with the rest of stage 3 rather than
+# ahead of it.
+
+def _bp_managed_clause(column: str) -> str:
+    """SQL true when `column` names a project this app actually manages."""
+    return f"({column} is not null and {column} != '')"
+
+
+def native_project_query_conditions(user=None):
+    """Scope native Project by BP membership, but only for BP-managed projects.
+
+    A project with no `custom_visibility` was not created through this app, so
+    it stays visible exactly as stock ERPNext would show it.
+    """
+    user = user or frappe.session.user
+    accessible = get_accessible_projects(user)
+    if accessible is None:
+        return ""  # admin — no restriction
+
+    not_bp_managed = f"not {_bp_managed_clause('`tabProject`.`custom_visibility`')}"
+    if not accessible:
+        # No memberships at all: this user simply isn't a BP user. Leave stock
+        # ERPNext behaviour for non-BP projects rather than hiding everything.
+        return not_bp_managed
+
+    vals = ", ".join(frappe.db.escape(p) for p in accessible)
+    return f"({not_bp_managed} or `tabProject`.`name` in ({vals}))"
+
+
+def native_task_query_conditions(user=None):
+    """Scope native Task the same way, plus the trash and assignee carve-outs.
+
+    `custom_is_deleted` is a Check, which Frappe creates NOT NULL DEFAULT 0
+    (see frappe/database/schema.py NOT_NULL_TYPES), so pre-existing ERPNext
+    tasks read as 0 rather than NULL and are not hidden by the trash filter.
+    """
+    user = user or frappe.session.user
+    not_deleted = "`tabTask`.`custom_is_deleted` = 0"
+
+    accessible = get_accessible_projects(user)
+    if accessible is None:
+        return not_deleted  # admin — still hide trash
+
+    # A task belonging to a project this app doesn't manage (or to no project
+    # at all) keeps stock ERPNext visibility.
+    outside_bp = (
+        "(`tabTask`.`project` is null or `tabTask`.`project` = '' or "
+        "`tabTask`.`project` not in "
+        "(select name from `tabProject` where custom_visibility is not null "
+        "and custom_visibility != ''))"
+    )
+
+    if not accessible:
+        return f"({outside_bp}) and {not_deleted}"
+
+    vals = ", ".join(frappe.db.escape(p) for p in accessible)
+    # Assignee carve-out, same as the BP Task rule: an explicit assignee sees
+    # their own task even with no project standing. Only ever ADDS task names.
+    assigned = (
+        f"`tabTask`.`name` in (select parent from `tabBP Task Assignee` "
+        f"where user = {frappe.db.escape(user)})"
+    )
+    scope = f"({outside_bp} or `tabTask`.`project` in ({vals}) or {assigned})"
+    return f"{scope} and {not_deleted}"

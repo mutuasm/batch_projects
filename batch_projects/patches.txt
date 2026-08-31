@@ -83,3 +83,8 @@ batch_projects.patches.backfill_automation_rule_definition_identity
 # migration closes. Must run after DocType schema sync (the column has to
 # exist first) and de-duplicate before ever writing a key twice.
 batch_projects.patches.backfill_run_telemetry_keys
+
+# Stage 1 of the native-doctype migration: BP field set added to ERPNext's own
+# Project/Task as Custom Fields. Additive, idempotent, nothing reads them yet.
+# post_model_sync: the native doctypes must be synced before fields attach.
+batch_projects.patches.create_native_project_custom_fields

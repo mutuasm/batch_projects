@@ -33,6 +33,17 @@ def after_install():
 
     override_erpnext_projects_module()
 
+    # Stage 1 of the native-doctype migration: give ERPNext's own Project/Task
+    # the BP field set. Additive and idempotent; nothing reads these yet.
+    from batch_projects.setup.native_fields import create_native_project_fields
+
+    create_native_project_fields()
+
+    # Stage 2: the Jira-shaped board and issue types, on native Task.
+    from batch_projects.setup.jira_workspace import setup_jira_workspace
+
+    setup_jira_workspace()
+
     frappe.db.commit()
     print("batch_projects installed successfully!")
 

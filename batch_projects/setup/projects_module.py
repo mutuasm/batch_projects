@@ -1,83 +1,83 @@
 """
 batch_projects/setup/projects_module.py
 ───────────────────────────────────────
-Makes BatchProjects the default Projects module in ERPNext v16.
+Adds the two Jira-style views to ERPNext's own `Projects` sidebar.
 
-Three things cooperate to do this; this module is the third.
+Three things cooperate to make Projects read as a Jira-style module; this is
+the third.
 
-1. `doctype_list_js` (hooks.py) redirects the stock `Project` and `Task` list
-   views into the BatchProjects SPA. That is the one that actually matters —
-   it catches every route into the stock lists (workspace cards, awesome-bar,
-   pasted `/desk/project` links, ERPNext's own internal links), not just the
-   nav.
-2. `batch_projects/workspace_sidebar/batchprojects.json` gives BatchProjects
-   its own first-class v16 module sidebar.
-3. This module re-points ERPNext's *own* `Projects` sidebar at BatchProjects,
-   so the nav agrees with where the links actually land.
+1. `doctype_js` / `doctype_list_js` (hooks.py) give native Project its
+   Jira-shaped navigation: opening a project goes to its task board, with Tree,
+   List, Gantt and Backlog one click away. See public/js/project_jira.js.
+2. `setup/jira_workspace.py` creates the Kanban Board on Task (grouped by
+   status) and the Epic/Story/Task/Bug/Sub-task issue types.
+3. This module adds `Task Board` and `Task Tree` entries to ERPNext's sidebar,
+   so the nav offers the same two views.
+
+Additive, not a takeover
+────────────────────────
+An earlier revision REPLACED ERPNext's Project/Task links with `/workspace`
+SPA URLs. The SPA is being retired, so that would aim the nav at URLs about to
+404 — and rewriting links on a doctype another app owns is the more fragile
+choice regardless. Everything ERPNext ships (Project, Task, Timesheet, Activity
+Type/Cost, every Projects report, Projects Settings) is left exactly as it is;
+those are the real destinations now. No row is ever deleted.
 
 Why this runs on `after_migrate` and not once at install
 ────────────────────────────────────────────────────────
 ERPNext's `Projects` Workspace Sidebar is a `standard: 1` record, which means
 `bench migrate` re-imports it from erpnext's own JSON on every single run and
-silently reverts anything we changed. Frappe runs `after_migrate` hooks after
-that sync, so re-asserting here is what makes the override survive upgrades.
-It is written to be idempotent and safe to run any number of times.
-
-What it deliberately does NOT do
-────────────────────────────────
-It leaves ERPNext's Timesheet / Activity Type / Activity Cost / Projects
-Settings entries and every Projects report alone. Those are the native ERP
-financial surfaces BatchProjects integrates with rather than replaces — the
-whole point of the app is that costing and billing stay in ERPNext. It also
-never deletes rows: entries are re-pointed in place, so removing this app (or
-one `bench migrate` after deleting this hook) restores stock behaviour.
+silently drops anything we appended. Frappe runs `after_migrate` hooks after
+that sync, so re-asserting here is what makes the additions survive upgrades.
+Idempotent and safe to run any number of times.
 """
 
 import frappe
 
-# ERPNext's Projects sidebar entries we take over, and where they now go.
-# Keyed by (link_type, link_to) as ERPNext ships them so we only ever rewrite
-# a row we actually recognise — never a customer's own added entry.
-_REPOINT = {
-    ("DocType", "Project"): {
-        "label": "Projects",
-        "url": "/workspace/all",
-        "icon": "projects",
+# Extra entries added to ERPNext's own `Projects` sidebar: the two views that
+# make it read as a Jira-style module. Everything ERPNext already lists
+# (Project, Task, Timesheet, Activity Type/Cost, reports, settings) is left
+# exactly as shipped — those are the real destinations now.
+#
+# This used to REPLACE those links with /workspace SPA URLs. The SPA is being
+# retired, so pointing a sidebar at it would aim the nav at URLs that are about
+# to 404. Additive is also simply safer against a doctype another app owns.
+_EXTRA_ITEMS = [
+    {
+        "label": "Task Board",
+        "type": "Link",
+        "link_type": "URL",
+        "url": "/desk/task/view/kanban/Projects Board",
+        "icon": "grid-2x2-check",
     },
-    ("DocType", "Task"): {
-        "label": "My Tasks",
-        "url": "/workspace/my-tasks",
-        "icon": "list-todo",
+    {
+        "label": "Task Tree",
+        "type": "Link",
+        "link_type": "URL",
+        # Task is `is_tree: 1` on parent_task, so this is the native
+        # epic -> story -> sub-task hierarchy, not something we render.
+        "url": "/desk/task/view/tree",
+        "icon": "list-tree",
     },
-    ("Workspace", "Projects"): {
-        "label": "Overview",
-        "url": "/workspace",
-        "icon": "layout-dashboard",
-    },
-    ("Dashboard", "Project"): {
-        "label": "Dashboards",
-        "url": "/workspace/dashboards",
-        "icon": "chart",
-    },
-}
+]
 
 _SIDEBAR_NAME = "Projects"
 
 
 def override_erpnext_projects_module():
-    """Re-point ERPNext's `Projects` sidebar at the BatchProjects SPA.
+    """Add the Task Board / Task Tree entries to ERPNext's `Projects` sidebar.
 
     Idempotent. No-ops cleanly when erpnext isn't installed, when the record
-    doesn't exist (older/newer ERPNext that names it differently), or when the
-    override is already in place.
+    doesn't exist (an ERPNext release that names it differently), or when the
+    entries are already present.
 
     Never raises. This runs from `after_install` and `after_migrate`, where an
     exception would abort the app install or the whole `bench migrate` — an
     absurd price for a navigation tweak. ERPNext restructures these records
-    between releases, so a future rename must degrade to "nav not re-pointed",
-    never "site cannot migrate". The redirect in
-    `public/js/erpnext_projects_redirect.js` is what actually makes
-    BatchProjects the default Projects view, and it does not depend on this.
+    between releases, so a future rename must degrade to "nav entries missing",
+    never "site cannot migrate". The Jira navigation in
+    `public/js/project_jira.js` is what actually makes the board the default
+    way into a project, and it does not depend on this.
     """
     try:
         _override_erpnext_projects_module()
@@ -105,21 +105,12 @@ def _override_erpnext_projects_module():
     except frappe.DoesNotExistError:
         return
 
+    have = {(row.label or "").strip() for row in doc.items}
     changed = False
-    for item in doc.items:
-        if item.type != "Link":
+    for item in _EXTRA_ITEMS:
+        if item["label"] in have:
             continue
-        target = _REPOINT.get((item.link_type, item.link_to))
-        if not target:
-            continue
-
-        item.link_type = "URL"
-        item.url = target["url"]
-        item.label = target["label"]
-        item.icon = target["icon"]
-        # A Dynamic Link field validates against link_type; leaving the old
-        # DocType/Workspace name behind on a URL row fails validation on save.
-        item.link_to = None
+        doc.append("items", dict(item))
         changed = True
 
     if not changed:
@@ -142,5 +133,5 @@ def _override_erpnext_projects_module():
         frappe.flags.in_import = previous_in_import
 
     frappe.logger("batch_projects").info(
-        "Re-pointed ERPNext's Projects sidebar at the BatchProjects SPA"
+        "Added Task Board / Task Tree entries to ERPNext's Projects sidebar"
     )
