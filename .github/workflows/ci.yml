@@ -4,7 +4,10 @@ on:
   pull_request:
     branches: ["version-*", "develop-16"]
   push:
-    branches: ["version-*", "develop-16"]
+    # feat/**, fix/**, sec/**, chore/** are included because a push to a
+    # short-lived branch previously ran nothing at all — the only coverage came
+    # from opening a PR, so work could sit unverified on a branch indefinitely.
+    branches: ["version-*", "develop-16", "feat/**", "fix/**", "sec/**", "chore/**", "refactor/**"]
 
 permissions:
   contents: read

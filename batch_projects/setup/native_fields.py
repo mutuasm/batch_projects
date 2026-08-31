@@ -32,6 +32,15 @@ No `reqd`
     app enforces it on its own write path in a later stage; it is not a schema
     constraint on a shared doctype.
 
+Why the two key fields are NOT mapped onto native naming
+    `custom_key` (a project's short prefix, e.g. BIM) and `custom_task_key`
+    (BIM-42) look like duplicates of native naming, and are deliberately kept.
+    Native Task autonames `TASK-.YYYY.-.#####` and Project `PROJ-.####` — both
+    site-wide sequences. A Jira key is a *per-project* counter, which a Frappe
+    naming series cannot express: BIM-1 and FA-1 must be able to coexist. So
+    these are genuinely additional information rather than a second spelling of
+    `name`.
+
 Only BP Project / BP Task are retargeted
     Of the 54 BP doctypes, exactly these two are being replaced by native
     counterparts. The other 52 — BP Sprint, BP Epic, BP Milestone, BP Team,
@@ -109,6 +118,7 @@ CUSTOM_FIELDS = {
         {"fieldname": "custom_source_quotation", "label": 'Source Quotation', "fieldtype": 'Link', "options": 'Quotation', "read_only": 1, "description": 'Set when this project was created from a Quotation.'},
     ],
     "Task": [
+        {"fieldname": "custom_status_label", "label": 'Status Label', "fieldtype": 'Data', "read_only": 1, "description": 'The project\'s own workflow-state name. Native status holds the Jira-style category (unstarted/started/completed/cancelled -> Open/Working/Completed/Cancelled), which is a closed Select and cannot hold arbitrary per-project state names.'},
         {"fieldname": "custom_task_key", "label": 'Task Key', "fieldtype": 'Data', "read_only": 1, "in_list_view": 1, "unique": 1},
         {"fieldname": "custom_sequence_no", "label": 'Sequence No', "fieldtype": 'Int', "read_only": 1, "hidden": 1, "description": 'Global monotonic sequence — stable internal identity independent of the display task_key. Assigned automatically at creation, never changed.'},
         {"fieldname": "custom_epic", "label": 'Epic', "fieldtype": 'Link', "options": 'BP Epic', "in_standard_filter": 1},
