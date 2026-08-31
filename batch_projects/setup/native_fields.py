@@ -26,6 +26,21 @@ Only BP Project / BP Task are retargeted
     custom_recurrence_source), while every other BP target is left alone on
     purpose.
 
+No `reqd`
+    A Custom Field must never be mandatory on a doctype another app owns. The
+    BP model could require `key`/`title` because BP Project/BP Task were ours;
+    native Project/Task belong to ERPNext and are created by erpnext's own
+    tests and fixtures, by CRM/HRMS, and by users. Carrying `reqd: 1` across
+    broke exactly that — `MandatoryError: [Project, PROJ-0001]: custom_key`
+    from erpnext's own test records. Where a value is genuinely required, the
+    app enforces it on its own write path in a later stage; it is not a schema
+    constraint on a shared doctype.
+
+    Note also that `custom_title` (Task) and `custom_key`/`custom_task_key`
+    overlap native `subject` and native naming. Whether those become mappings
+    onto the native fields rather than separate columns is a stage-3 decision,
+    once the read/write paths move over.
+
 No `insert_after`: Frappe appends, and field layout is the desk-UI stage's job.
 """
 
@@ -35,7 +50,7 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 CUSTOM_FIELDS = {
     "Project": [
-        {"fieldname": "custom_key", "label": 'Key', "fieldtype": 'Data', "reqd": 1, "description": '2-6 char prefix for issue IDs (e.g., BIM, FA, HTR)', "unique": 1},
+        {"fieldname": "custom_key", "label": 'Key', "fieldtype": 'Data', "description": '2-6 char prefix for issue IDs (e.g., BIM, FA, HTR)', "unique": 1},
         {"fieldname": "custom_project_color", "label": 'Project Color', "fieldtype": 'Color', "default": '#0B6BCB'},
         {"fieldname": "custom_project_icon", "label": 'Project Icon', "fieldtype": 'Data', "default": 'Folder'},
         {"fieldname": "custom_theme", "label": 'Theme', "fieldtype": 'Select', "options": '\nkoalaBlue\nkoalaGreen\nkoalaRed\nnotesOrange\nnotesPurple\ntreasureGray\ntreasureSand\nwhiteboard\nyetiBlue\nyetiGreen', "description": 'Illustrated project avatar shown in the sidebar and project cards.'},
@@ -77,7 +92,7 @@ CUSTOM_FIELDS = {
         {"fieldname": "custom_source_quotation", "label": 'Source Quotation', "fieldtype": 'Link', "options": 'Quotation', "read_only": 1, "description": 'Set when this project was created from a Quotation.'},
     ],
     "Task": [
-        {"fieldname": "custom_title", "label": 'Title', "fieldtype": 'Data', "reqd": 1, "in_list_view": 1},
+        {"fieldname": "custom_title", "label": 'Title', "fieldtype": 'Data', "in_list_view": 1},
         {"fieldname": "custom_task_key", "label": 'Task Key', "fieldtype": 'Data', "read_only": 1, "in_list_view": 1, "unique": 1},
         {"fieldname": "custom_sequence_no", "label": 'Sequence No', "fieldtype": 'Int', "read_only": 1, "hidden": 1, "description": 'Global monotonic sequence — stable internal identity independent of the display task_key. Assigned automatically at creation, never changed.'},
         {"fieldname": "custom_epic", "label": 'Epic', "fieldtype": 'Link', "options": 'BP Epic', "in_standard_filter": 1},
