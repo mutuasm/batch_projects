@@ -1,16 +1,16 @@
-# Deploying BatchProjects
+# Deploying Projects
 
-BatchProjects is a single, fully open edition — every feature is enabled on
+Projects is a single, fully open edition — every feature is enabled on
 every install. There is nothing to license and no paid tier, so a deployment
 is just a Frappe app install.
 
-1. **BatchProjects** — the Frappe application and Vue interface. Installed
+1. **Projects** — the Frappe application and Vue interface. Installed
    with a standard `bench get-app`, and works anywhere Frappe does:
    self-hosted (Docker or bare bench) or on Frappe Cloud. See the
    [root README](../README.md#quick-start). Starting from nothing?
    [`docker-compose.selfhost.yml`](docker-compose.selfhost.yml) provisions
-   ERPNext and BatchProjects together.
-2. **An optional automation side-car** — BatchProjects can hand durable
+   ERPNext and Projects together.
+2. **An optional automation side-car** — Projects can hand durable
    automation timers and realtime fan-out to a small external service. It is
    entirely optional, gates no features, and the app runs fully standalone
    without it. See [Optional side-car](#optional-side-car) below.
@@ -19,7 +19,7 @@ is just a Frappe app install.
 
 | Relationship | Mechanism | How it's enforced |
 |---|---|---|
-| **BatchProjects ⨯ ERPNext/Frappe core** | A dedicated git branch per ERPNext release line — `version-16` targets ERPNext v16 (Python 3.14+, Node 24+); `version-15` remains for the v15 line. | Selected at install time (`bench get-app --branch version-16`). |
+| **Projects ⨯ ERPNext/Frappe core** | A dedicated git branch per ERPNext release line — `version-16` targets ERPNext v16 (Python 3.14+, Node 24+); `version-15` remains for the v15 line. | Selected at install time (`bench get-app --branch version-16`). |
 
 Select the `version-NN` branch matching your ERPNext installation. The app
 also declares its supported range in `pyproject.toml`
@@ -35,9 +35,9 @@ also declares its supported range in `pyproject.toml`
 
 ## Replacing ERPNext's Projects module
 
-Installing BatchProjects on ERPNext v16 makes it the default Projects
+Installing Projects on ERPNext v16 makes it the default Projects
 experience — the stock `Project` and `Task` desk lists redirect into the
-BatchProjects SPA, BatchProjects gets its own workspace sidebar, and
+Projects SPA, Projects gets its own workspace sidebar, and
 ERPNext's `Projects` sidebar is re-pointed at it (re-asserted after every
 `bench migrate`, since that record is owned by erpnext and re-imported on
 each sync).
@@ -52,7 +52,7 @@ persists for the rest of the browser session.
 
 ## Optional side-car
 
-These are the only `site_config.json` keys BatchProjects reads for the
+These are the only `site_config.json` keys Projects reads for the
 optional external service. All are unset by default, and every one of them
 fails closed — absent config means the feature simply runs in-process or not
 at all, never that a check is skipped.

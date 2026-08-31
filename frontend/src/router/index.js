@@ -337,10 +337,10 @@ function isPublicRoute(to) {
 
 // ─── Document title ──────────────────────────────────────────────────────────
 // Each route carries a meta.title; render it as "Page — BatchProjects" (or
-// "BatchProjects" on routes that don't declare one, e.g. redirects).
+// "Projects" on routes that don't declare one, e.g. redirects).
 router.afterEach((to) => {
   const page = to.meta?.title;
-  document.title = page ? `${page} — BatchProjects` : "BatchProjects";
+  document.title = page ? `${page} — Projects` : "Projects";
 });
 
 router.beforeEach((to) => {

@@ -1,6 +1,6 @@
-# Contributing to BatchProjects
+# Contributing to Projects
 
-BatchProjects is maintained as production software for the ERPNext ecosystem. Contributions are welcome, but changes must be reviewable, testable, and safe to operate.
+Projects is maintained as production software for the ERPNext ecosystem. Contributions are welcome, but changes must be reviewable, testable, and safe to operate.
 
 ## Before you start
 
@@ -52,11 +52,11 @@ Short-lived implementation branches should describe intent, for example:
 - `refactor/455-board-service`
 - `chore/470-ci-frappe-tests`
 
-See [`deploy/README.md`](deploy/README.md) for BatchProjects/Gateway/ERPNext compatibility.
+See [`deploy/README.md`](deploy/README.md) for Projects/Gateway/ERPNext compatibility.
 
 ## Development setup
 
-BatchProjects is a Frappe app plus a Vue 3 / Vite SPA.
+Projects is a Frappe app plus a Vue 3 / Vite SPA.
 
 Frappe/ERPNext v16 require **Python 3.14+** and **Node 24+**; the CI matrix
 pins exactly those.

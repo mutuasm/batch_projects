@@ -69,7 +69,7 @@
                 <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                   <div>
                     <p class="text-base font-medium text-foreground">Edition</p>
-                    <p class="text-sm text-muted mt-0.5">BatchProjects ships as a single edition with every feature enabled.</p>
+                    <p class="text-sm text-muted mt-0.5">Projects ships as a single edition with every feature enabled.</p>
                   </div>
                   <div class="flex items-center gap-3">
                     <Chip size="sm" color="accent" variant="soft">{{ ent.tierLabel }}</Chip>
@@ -373,7 +373,7 @@
                   <div class="min-w-0 flex-1">
                     <p class="text-md font-semibold text-foreground">Make it yours</p>
                     <p class="text-base text-muted mt-1 leading-relaxed">
-                      Replace the BatchProjects name, sidebar logo, and browser tab icon with your own —
+                      Replace the Projects name, sidebar logo, and browser tab icon with your own —
                       what your team and clients see stays fully white-labeled. Available on the
                       <span class="font-semibold text-foreground">{{ ent.requiredPlanFor('custom_branding') }}</span> plan and above.
                     </p>
@@ -390,8 +390,8 @@
               <div class="bp-set-card" :class="{ 'opacity-50 pointer-events-none': !ent.can('custom_branding') }">
                 <div class="py-6">
                   <p class="text-base font-medium text-foreground mb-1">Brand name</p>
-                  <p class="text-sm text-muted mb-3">Replaces "BatchProjects" in the sidebar and browser tab title.</p>
-                  <Input v-model="branding.brand_name" size="md" placeholder="BatchProjects" class="max-w-[360px]" />
+                  <p class="text-sm text-muted mb-3">Replaces "Projects" in the sidebar and browser tab title.</p>
+                  <Input v-model="branding.brand_name" size="md" placeholder="Projects" class="max-w-[360px]" />
                 </div>
 
                 <div class="py-6 border-t border-separator">

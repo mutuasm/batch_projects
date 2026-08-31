@@ -188,6 +188,15 @@ module in ERPNext.
 
 ### Notes
 
+- The app's **display name is now "Projects"** (`app_title`, apps-screen entry,
+  SPA chrome and docs). The Frappe app name stays `batch_projects`, as do the
+  module name, the `BP ` doctype prefixes and every API path — there is no
+  `bench rename-app`, so renaming the package would leave existing installs
+  with no migration path. The `Workspace Sidebar` record also keeps its
+  `BatchProjects` title: that doctype autonames from `title` (`field:title`)
+  and erpnext already owns `name="Projects"`. Entries above this release keep
+  the old name deliberately — they record what shipped at the time.
+
 - Existing `/app/<doctype>/<name>` deep links continue to work: v16 moved the
   desk to `/desk` but ships an `/app/(.*)` → `/desk/\1` redirect.
 - The committed SPA bundle under `batch_projects/public/frontend/` is rebuilt

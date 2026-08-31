@@ -15,7 +15,7 @@ Email **info@batchnepal.com** with:
 
 - A description of the vulnerability and its impact.
 - Steps to reproduce (a minimal repro is enormously helpful).
-- The BatchProjects version / branch you tested against.
+- The Projects version / branch you tested against.
 - Whether the finding involves the gateway add-on (`bp-gateway`) or the
   core Frappe app — both are in scope, the gateway just isn't public source,
   so a code-level receipt isn't expected for it.

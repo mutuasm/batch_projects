@@ -110,14 +110,14 @@ const isProjectRoute = computed(() =>
 const currentPageTitle = computed(() => {
   if (route.params.key) return route.params.key.toUpperCase()
   const map = { '/workspace': 'Home', '/workspace/my-tasks': 'My Tasks', '/workspace/notifications': 'Inbox', '/workspace/all': 'Projects' }
-  return map[route.path] || 'BatchProjects'
+  return map[route.path] || 'Projects'
 })
 
 // White-label branding (Team plan+) — applies the moment entitlements load
 // or change (plan upgrade, admin edit), no reload needed.
 watch(() => entitlements.branding, (b) => {
   if (!b) return
-  document.title = b.brand_name || 'BatchProjects'
+  document.title = b.brand_name || 'Projects'
   if (b.favicon_url) {
     let link = document.querySelector('link[rel="icon"]')
     if (!link) {

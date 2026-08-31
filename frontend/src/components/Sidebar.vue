@@ -995,7 +995,7 @@ const workspaceName = computed(
     entitlements.branding.brand_name ||
     window.frappe?.boot?.sysdefaults?.company ||
     window.frappe?.sitename?.split('.')[0] ||
-    'BatchProjects'
+    'Projects'
 )
 
 // ── User info (reactive — sourced from the store, not window.frappe) ─────

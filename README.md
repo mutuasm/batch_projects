@@ -1,10 +1,10 @@
 <p align="center">
   <a href="https://batchprojects.com">
-    <img src="frontend/public/images/bp-logo-new.png" alt="BatchProjects Logo" width="80" height="80">
+    <img src="frontend/public/images/bp-logo-new.png" alt="Projects Logo" width="80" height="80">
   </a>
 </p>
 
-<h1 align="center">BatchProjects</h1>
+<h1 align="center">Projects</h1>
 
 <p align="center">
   <b>Enterprise-grade project management, built natively into ERPNext.</b>
@@ -20,12 +20,12 @@
 ---
 
 <p align="center">
-  <img src="frontend/public/images/bp-hero.png" alt="BatchProjects Board View" width="100%">
+  <img src="frontend/public/images/bp-hero.png" alt="Projects Board View" width="100%">
 </p>
 
 ## Overview
 
-Meet BatchProjects, an open-source project management app for your team built natively for ERPNext.
+Meet Projects, an open-source project management app for your team built natively for ERPNext.
 
 Experience the freedom of managing your projects in a fast, modern, and collaborative interface while keeping all your financials, timesheets, and accounting inside ERPNext. No more exporting, no more manual syncing, and no more context switching between multiple tools.
 
@@ -63,7 +63,7 @@ Experience the freedom of managing your projects in a fast, modern, and collabor
 
 ## Licensing & Architecture
 
-BatchProjects is a single, fully open edition. **Every feature is enabled on
+Projects is a single, fully open edition. **Every feature is enabled on
 every install** — there are no paid tiers, no licence keys, no seat caps and no
 feature gates. Kanban boards, backlogs, sprints, Gantt, automations, webhooks,
 dashboards, intake forms, portfolio, goals, audit log and ERPNext billing
@@ -73,7 +73,7 @@ Previous releases used an open-core model in which a proprietary `bp-gateway`
 companion service unlocked premium features and asserted a licence tier. As of
 **v2.0.0 that model is gone**: the tier ladder, seat enforcement and the
 gateway's licensing/identity layer have been removed from the app, and
-authorization is enforced entirely by BatchProjects' own project-scoped
+authorization is enforced entirely by Projects' own project-scoped
 permission model inside Frappe.
 
 ---
@@ -92,7 +92,7 @@ permission model inside Frappe.
 
 ## Quick Start (Core App)
 
-BatchProjects runs as a standard Frappe app on **Frappe v16 / ERPNext v16**
+Projects runs as a standard Frappe app on **Frappe v16 / ERPNext v16**
 (Python 3.14+, Node 24+ for frontend development).
 
 ```bash
@@ -122,13 +122,13 @@ For local frontend development, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Replacing ERPNext's stock Projects module
 
-On ERPNext v16, installing BatchProjects makes it the **default Projects
+On ERPNext v16, installing Projects makes it the **default Projects
 experience**:
 
 * The stock `Project` and `Task` desk list views redirect into the
-  BatchProjects SPA, so the BP project list is the default project list.
-* BatchProjects gets its own first-class v16 workspace sidebar.
-* ERPNext's own `Projects` sidebar is re-pointed at BatchProjects on install
+  Projects SPA, so the BP project list is the default project list.
+* Projects gets its own first-class v16 workspace sidebar.
+* ERPNext's own `Projects` sidebar is re-pointed at Projects on install
   and re-asserted after every `bench migrate`.
 
 ERPNext's native financial surfaces — Timesheet, Activity Type/Cost, Projects
@@ -143,7 +143,7 @@ See [`deploy/README.md`](deploy/README.md) for the deployment guide.
 
 ## License
 
-BatchProjects — the Frappe app and the Vue frontend, everything in this
+Projects — the Frappe app and the Vue frontend, everything in this
 repo — is licensed under the **GNU Affero General Public License v3.0**
 (AGPL-3.0-only). See [`LICENSE`](LICENSE).
 
@@ -152,7 +152,7 @@ network service for others (e.g. offer it as SaaS), you must make your
 modified source available to those users. Just self-hosting it for your own
 company, unmodified or modified, carries no such obligation beyond attribution.
 
-Everything needed to run BatchProjects is in this repository under that one
+Everything needed to run Projects is in this repository under that one
 license, and nothing about the app is gated behind a licence any more.
 
 One optional integration point remains: the app can hand durable automation

@@ -1,5 +1,5 @@
 app_name = "batch_projects"
-app_title = "BatchProjects"
+app_title = "Projects"
 app_publisher = "BatchNepal Consultancy"
 app_description = "Enterprise Grade Project Management for ERPNext"
 app_email = "info@batchnepal.com"
@@ -15,7 +15,7 @@ add_to_apps_screen = [
     {
         "name": "batch_projects",
         "logo": "/assets/batch_projects/images/bp-logo-new.svg",
-        "title": "BatchProjects",
+        "title": "Projects",
         "route": "/workspace",
     }
 ]

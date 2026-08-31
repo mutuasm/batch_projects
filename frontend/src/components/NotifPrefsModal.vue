@@ -22,7 +22,7 @@
             </span>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-foreground leading-snug">In-app</p>
-              <p class="text-base text-muted leading-snug">Inbox bell + live updates inside BatchProjects</p>
+              <p class="text-base text-muted leading-snug">Inbox bell + live updates inside Projects</p>
             </div>
             <Switch :is-selected="!!prefs.inapp_enabled" @update:is-selected="toggle('inapp_enabled')" />
           </div>
