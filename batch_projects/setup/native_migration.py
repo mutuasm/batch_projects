@@ -338,3 +338,87 @@ def retarget_satellite_links():
     frappe.db.commit()
     frappe.logger("batch_projects").info(f"satellite retarget: {stats}")
     return stats
+
+
+# ─── DRY RUN ─────────────────────────────────────────────────────────────────
+
+def dry_run_native_migration():
+    """Report what a migration would do, writing nothing.
+
+    Activation is the first irreversible step in this whole effort — it creates
+    native rows and rewrites satellite Link values in place. Being able to see
+    the blast radius, and specifically the rows that would *fail*, before
+    anything is written is worth more than a careful re-read of the code.
+
+    Every check here is a read. Returns a plain dict so it is equally usable
+    from `bench execute` and from a test.
+    """
+    report = {
+        "projects": {"total": 0, "already_mapped": 0, "to_create": 0, "blocked": []},
+        "tasks": {"total": 0, "already_mapped": 0, "to_create": 0, "unknown_status": []},
+        "satellites": {"fields": 0, "rows": 0, "detail": []},
+        "collisions": {},
+    }
+
+    default_company = frappe.defaults.get_global_default("company")
+
+    for row in frappe.get_all("BP Project", fields=["name", "project_name", "company", "status"]):
+        report["projects"]["total"] += 1
+        if _existing_target("BP Project", row.name, "erpnext_project", "Project"):
+            report["projects"]["already_mapped"] += 1
+            continue
+        report["projects"]["to_create"] += 1
+        # company is mandatory on native Project; without one the insert fails.
+        if not (row.company or default_company):
+            report["projects"]["blocked"].append(
+                {"name": row.name, "reason": "no company and no global default"}
+            )
+        if row.status and row.status not in _PROJECT_STATUS:
+            report["projects"]["blocked"].append(
+                {"name": row.name, "reason": f"unmapped status {row.status!r}"}
+            )
+
+    category_cache = {}
+    for row in frappe.get_all("BP Task", fields=["name", "title", "project", "status"]):
+        report["tasks"]["total"] += 1
+        if _existing_target("BP Task", row.name, "erpnext_task", "Task"):
+            report["tasks"]["already_mapped"] += 1
+            continue
+        report["tasks"]["to_create"] += 1
+        if row.project and row.status:
+            if row.project not in category_cache:
+                category_cache[row.project] = _workflow_categories(row.project)
+            if str(row.status) not in category_cache[row.project]:
+                # Not fatal — it falls back to the `unstarted` category — but
+                # it means a status whose intent we are guessing at.
+                report["tasks"]["unknown_status"].append(
+                    {"name": row.name, "status": row.status, "project": row.project}
+                )
+
+    for bp_doctype in _RETIRING_DOCTYPES:
+        collisions = _name_collisions(bp_doctype)
+        if collisions:
+            report["collisions"][bp_doctype] = sorted(collisions)[:20]
+
+    for doctype, fieldname, bp_doctype in _satellite_link_fields():
+        anchor_field, _ = _ANCHOR[bp_doctype]
+        try:
+            pending = frappe.db.sql(
+                f"""
+                SELECT count(*)
+                  FROM `tab{doctype}` sat
+                  JOIN `tab{bp_doctype}` bp ON sat.`{fieldname}` = bp.`name`
+                 WHERE bp.`{anchor_field}` is not null
+                   AND bp.`{anchor_field}` != ''
+                """
+            )[0][0]
+        except Exception:
+            pending = None  # table may not exist yet on a partial install
+        report["satellites"]["fields"] += 1
+        if pending:
+            report["satellites"]["rows"] += pending
+            report["satellites"]["detail"].append(
+                {"doctype": doctype, "field": fieldname, "rows": pending}
+            )
+
+    return report

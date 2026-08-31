@@ -54,16 +54,27 @@ _ISSUE_TYPES = ["Epic", "Story", "Task", "Bug", "Sub-task"]
 
 
 def setup_jira_workspace():
-    """Create the board and issue types. Idempotent, never raises."""
-    try:
-        _ensure_issue_types()
-        _ensure_task_board()
-        frappe.db.commit()
-    except Exception:
-        frappe.log_error(
-            frappe.get_traceback(),
-            "batch_projects: could not set up the Jira-style Projects workspace",
-        )
+    """Create the board and issue types. Idempotent, never raises.
+
+    Each step is isolated. A single try around both meant a failure in the
+    first silently skipped the second — which is exactly what happened: an
+    unset `name` on Task Type (it autonames by Prompt) aborted the whole
+    function, so the Kanban Board was never created either, and the swallowed
+    exception kept CI green while nothing had been set up. Same shape as the
+    bug this app works around in frappe's own auto_generate_icons_and_sidebar.
+    """
+    for label, step in (
+        ("issue types", _ensure_issue_types),
+        ("task board", _ensure_task_board),
+    ):
+        try:
+            step()
+            frappe.db.commit()
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"batch_projects: could not set up the Jira-style {label}",
+            )
 
 
 def _ensure_issue_types():
@@ -71,9 +82,13 @@ def _ensure_issue_types():
         return  # erpnext not installed
     for name in _ISSUE_TYPES:
         if not frappe.db.exists("Task Type", name):
-            frappe.get_doc({"doctype": "Task Type", "task_type": name}).insert(
-                ignore_permissions=True
-            )
+            doc = frappe.get_doc({"doctype": "Task Type", "task_type": name})
+            # Task Type autonames by `Prompt` (naming_rule "Set by user"), so
+            # the name has to be supplied explicitly — without it frappe raises
+            # "Please set the document name" rather than deriving it from
+            # task_type.
+            doc.name = name
+            doc.insert(ignore_permissions=True)
 
 
 def _ensure_task_board():

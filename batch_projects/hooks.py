@@ -11,14 +11,27 @@ app_license = "AGPL-3.0"
 # it exactly this way for the same reason.
 from . import __version__ as app_version
 
-add_to_apps_screen = [
-    {
-        "name": "batch_projects",
-        "logo": "/assets/batch_projects/images/bp-logo-new.svg",
-        "title": "Projects",
-        "route": "/workspace",
-    }
-]
+# No `add_to_apps_screen`, deliberately.
+#
+# This app is not a separate destination any more — it IS ERPNext's Projects
+# module, reached through the Projects workspace on the desk. The entry it used
+# to declare pointed at `/workspace`, the Vue SPA route that is being removed.
+#
+# Removing it also fixes a real, site-wide side effect of titling the app
+# "Projects". frappe's create_desktop_icons_from_installed_apps() labels an
+# app's Desktop Icon with `app_title`, and Desktop Icon autonames `field:label`
+# — but its duplicate guard checks (label, icon_type="App") while the primary
+# key is `label` alone. ERPNext already owns a Desktop Icon named "Projects"
+# with icon_type="Link" (auto-generated from its Projects *Workspace*), so the
+# guard misses it and the insert raises IntegrityError. That exception is caught
+# one level up in frappe.utils.install.auto_generate_icons_and_sidebar, which
+# aborts the whole block — so create_desktop_icons_from_workspace() never runs
+# and workspace icons stop being generated for EVERY app on the site.
+#
+# Confirmed on a live v16 site: install printed
+# `Error creating icons ('Desktop Icon', 'Projects', IntegrityError(1062, ...))`
+# and afterwards only 5 of the installed apps had an icon_type="App" icon.
+# With no add_to_apps_screen the icon is never attempted, so nothing collides.
 
 # app_include_js = ["/assets/batch_projects/js/batch_projects.js"]
 
