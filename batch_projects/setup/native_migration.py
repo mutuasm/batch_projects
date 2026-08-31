@@ -214,3 +214,127 @@ def run_native_migration():
     frappe.db.commit()
     frappe.logger("batch_projects").info(f"native migration: {stats}")
     return stats
+
+
+# ─── SATELLITE LINK RETARGETING ──────────────────────────────────────────────
+#
+# 39 Link fields across 32 satellite doctypes hold BP Project / BP Task row
+# names. Once every parent has a native counterpart those stored values have to
+# be rewritten to the native names, or the Links dangle.
+#
+# The four fields on BP Project / BP Task themselves (project, parent_project,
+# parent_task, recurrence_source) are deliberately excluded: those doctypes are
+# being retired, and `BP Task.project` is what the migration itself reads to
+# resolve a task's project. Rewriting them mid-migration would cut the ground
+# out from under it.
+#
+# Field discovery is done from live meta rather than a hardcoded list, so a
+# satellite added later is picked up automatically instead of being silently
+# skipped.
+
+_RETIRING_DOCTYPES = ("BP Project", "BP Task")
+
+_ANCHOR = {
+    "BP Project": ("erpnext_project", "Project"),
+    "BP Task": ("erpnext_task", "Task"),
+}
+
+
+def _satellite_link_fields():
+    """[(doctype, fieldname, bp_doctype)] for every Link into a retiring doctype."""
+    out = []
+    for bp_doctype in _RETIRING_DOCTYPES:
+        for row in frappe.get_all(
+            "DocField",
+            filters={"fieldtype": "Link", "options": bp_doctype},
+            fields=["parent", "fieldname"],
+            ignore_permissions=True,
+        ):
+            if row.parent in _RETIRING_DOCTYPES:
+                continue  # on the retiring doctype itself — see note above
+            out.append((row.parent, row.fieldname, bp_doctype))
+    return out
+
+
+def _name_collisions(bp_doctype):
+    """BP row names that are also native row names.
+
+    The rewrite is a JOIN from the stored value back to the BP table, which is
+    naturally idempotent *unless* a native name happens to equal a BP name — in
+    which case a second run would rewrite an already-rewritten value. Real BP
+    names and native `PROJ-####` / `TASK-YYYY-#####` series should never
+    collide, but a site that renamed rows could. Cheap to check, expensive to
+    discover later.
+    """
+    anchor_field, native_doctype = _ANCHOR[bp_doctype]
+    bp_names = set(frappe.get_all(bp_doctype, pluck="name"))
+    if not bp_names:
+        return set()
+    native_names = set(frappe.get_all(native_doctype, pluck="name"))
+    return bp_names & native_names
+
+
+def retarget_satellite_links():
+    """Rewrite satellite Link values from BP row names to native ones.
+
+    Idempotent and never raises — this runs from a patch. Returns per-field
+    counts so a partial run is visible rather than guessed at.
+    """
+    stats = {"updated": 0, "fields": 0, "skipped_collision": [], "failed": 0}
+
+    for bp_doctype in _RETIRING_DOCTYPES:
+        collisions = _name_collisions(bp_doctype)
+        if collisions:
+            # Fail loudly rather than corrupt values: a collision means the
+            # JOIN can no longer tell a rewritten value from a stale one.
+            stats["skipped_collision"].append(
+                {"doctype": bp_doctype, "count": len(collisions)}
+            )
+            frappe.log_error(
+                f"{bp_doctype}: {len(collisions)} name(s) collide with existing "
+                f"{_ANCHOR[bp_doctype][1]} names, e.g. {sorted(collisions)[:5]}. "
+                "Satellite retargeting skipped for this doctype to avoid "
+                "rewriting already-migrated values.",
+                "native migration: name collision",
+            )
+
+    for doctype, fieldname, bp_doctype in _satellite_link_fields():
+        if any(c["doctype"] == bp_doctype for c in stats["skipped_collision"]):
+            continue
+        anchor_field, _ = _ANCHOR[bp_doctype]
+        try:
+            # Counted explicitly rather than read off the cursor: frappe's
+            # database layer exposes no rowcount, so `frappe.db._cursor` would
+            # be reaching past a private boundary for a number we can just ask
+            # for.
+            pending = frappe.db.sql(
+                f"""
+                SELECT count(*)
+                  FROM `tab{doctype}` sat
+                  JOIN `tab{bp_doctype}` bp ON sat.`{fieldname}` = bp.`name`
+                 WHERE bp.`{anchor_field}` is not null
+                   AND bp.`{anchor_field}` != ''
+                """
+            )[0][0]
+            if pending:
+                frappe.db.sql(
+                    f"""
+                    UPDATE `tab{doctype}` sat
+                      JOIN `tab{bp_doctype}` bp ON sat.`{fieldname}` = bp.`name`
+                       SET sat.`{fieldname}` = bp.`{anchor_field}`
+                     WHERE bp.`{anchor_field}` is not null
+                       AND bp.`{anchor_field}` != ''
+                    """
+                )
+            stats["updated"] += pending
+            stats["fields"] += 1
+        except Exception:
+            stats["failed"] += 1
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"native migration: retarget {doctype}.{fieldname}",
+            )
+
+    frappe.db.commit()
+    frappe.logger("batch_projects").info(f"satellite retarget: {stats}")
+    return stats
