@@ -33,6 +33,12 @@ def after_install():
 
     override_erpnext_projects_module()
 
+    # Stage 1 of the native-doctype migration: give ERPNext's own Project/Task
+    # the BP field set. Additive and idempotent; nothing reads these yet.
+    from batch_projects.setup.native_fields import create_native_project_fields
+
+    create_native_project_fields()
+
     frappe.db.commit()
     print("batch_projects installed successfully!")
 
