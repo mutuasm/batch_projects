@@ -96,3 +96,84 @@ class TestMigrationMapLegality(IntegrationTestCase):
     def test_task_priorities_are_valid(self):
         valid = self._options("Task", "priority")
         self.assertLessEqual(set(_TASK_PRIORITY.values()), valid)
+
+
+class _FakeDoc:
+    """Minimal Document stand-in: .get()/.set() only.
+
+    frappe._dict is NOT usable here — it resolves unknown attributes to None
+    via __getattr__, so `doc.set(...)` silently becomes None and the call fails
+    with "NoneType object is not callable" rather than testing anything.
+    """
+
+    def __init__(self, **values):
+        self._values = dict(values)
+
+    def get(self, field, default=None):
+        return self._values.get(field, default)
+
+    def set(self, field, value):
+        self._values[field] = value
+
+
+class TestBackfillEmptiness(UnitTestCase):
+    """Numeric zero must count as "not filled in yet" on the native side.
+
+    Regression, found only by migrating on a real site: Frappe creates
+    Int/Float/Currency/Check columns NOT NULL DEFAULT 0, so a fresh native row
+    reads 0.0 for every number. Treating that as "already has a value" made the
+    backfill skip every numeric field in complete silence — BP budget_amount
+    5000 and hourly_rate 120 both landed as 0.0 with no error anywhere.
+
+    This is the failure mode the migration is most exposed to: nothing raises,
+    nothing logs, the numbers are just quietly missing.
+    """
+
+    def test_native_numeric_zero_counts_as_unset(self):
+        from batch_projects.setup.native_migration import _native_unset
+
+        for value in (0, 0.0, None, ""):
+            self.assertTrue(_native_unset(value), f"{value!r} should count as unset")
+
+    def test_real_native_values_do_not_count_as_unset(self):
+        from batch_projects.setup.native_migration import _native_unset
+
+        for value in (1, 0.01, -1, "x", "0"):
+            self.assertFalse(_native_unset(value), f"{value!r} should count as set")
+
+    def test_only_none_and_blank_are_nothing_to_copy(self):
+        """A BP zero is a real value; absence is None or "" only."""
+        from batch_projects.setup.native_migration import _nothing_to_copy
+
+        self.assertTrue(_nothing_to_copy(None))
+        self.assertTrue(_nothing_to_copy(""))
+        self.assertFalse(_nothing_to_copy(0))
+        self.assertFalse(_nothing_to_copy(0.0))
+
+    def test_fill_writes_over_a_numeric_zero(self):
+        from batch_projects.setup.native_migration import _fill
+
+        doc = _FakeDoc(estimated_costing=0.0)
+        self.assertTrue(_fill(doc, "estimated_costing", 5000))
+        self.assertEqual(doc.get("estimated_costing"), 5000)
+
+    def test_fill_does_not_clobber_a_real_native_value(self):
+        from batch_projects.setup.native_migration import _fill
+
+        doc = _FakeDoc(estimated_costing=999.0)
+        self.assertFalse(_fill(doc, "estimated_costing", 5000))
+        self.assertEqual(doc.get("estimated_costing"), 999.0)
+
+    def test_authoritative_fill_overwrites_regardless(self):
+        """Translated enums must win — a stale status defeats the translation."""
+        from batch_projects.setup.native_migration import _fill
+
+        doc = _FakeDoc(status="Open")
+        self.assertTrue(_fill(doc, "status", "Completed", authoritative=True))
+        self.assertEqual(doc.get("status"), "Completed")
+
+    def test_fill_is_a_noop_when_the_value_already_matches(self):
+        from batch_projects.setup.native_migration import _fill
+
+        doc = _FakeDoc(status="Completed")
+        self.assertFalse(_fill(doc, "status", "Completed", authoritative=True))

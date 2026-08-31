@@ -92,6 +92,73 @@ def _scalar_custom_fields(doctype):
     ]
 
 
+def _native_unset(value):
+    """Whether a NATIVE field should count as "not filled in yet".
+
+    Numeric zero has to count as unset here. Frappe creates
+    Int/Float/Currency/Check columns NOT NULL DEFAULT 0 (see
+    frappe/database/schema.py NOT_NULL_TYPES), so a fresh native row reads 0.0
+    for every number — and treating that as "already has a value" made the
+    backfill skip every numeric field in complete silence. Confirmed on a live
+    site: BP budget_amount 5000 and hourly_rate 120 both landed as 0.0 with no
+    error anywhere.
+
+    The trade-off is a Check deliberately set to 0 natively, which a BP 1 will
+    overwrite. That is the right way round while BP is still the system of
+    record; after activation nothing writes BP.
+    """
+    return value in (None, "", 0, 0.0)
+
+
+def _nothing_to_copy(value):
+    """Whether a BP value is absent. Distinct from _native_unset on purpose.
+
+    A BP zero is a real value, not an absence — but copying it onto a native
+    field that is already 0 is a no-op either way, so only None/"" count as
+    nothing to copy. Conflating the two questions in one predicate is what made
+    the numeric bug hard to see.
+    """
+    return value in (None, "")
+
+
+def _fill(native_doc, field, value, authoritative=False):
+    """Write `value` onto the native row. Returns True if it changed anything.
+
+    Non-authoritative fields are filled only when the native side is unset, so a
+    value somebody set directly on the native row is never clobbered.
+    Authoritative fields (the translated enums) are always written: getting the
+    status vocabulary right is the entire point of the translation, and leaving
+    a stale one defeats it.
+    """
+    if _nothing_to_copy(value):
+        return False
+    if not authoritative and not _native_unset(native_doc.get(field)):
+        return False
+    if native_doc.get(field) == value:
+        return False
+    native_doc.set(field, value)
+    return True
+
+
+def _backfill(bp_doc, native_doc, doctype):
+    """Copy BP values onto an EXISTING native row. Returns True if it changed.
+
+    This exists because the old erp_link bridge already creates a native Project
+    when a BP Project is inserted — so on any site that used it, every BP row is
+    already mapped and a create-only migration would copy nothing at all,
+    silently leaving stub rows behind (confirmed on a live site: bridged
+    Projects had custom_key None and an untranslated status). A migration that
+    no-ops on the common case is worse than no migration.
+    """
+    changed = False
+    for bp_field, native_field in NATIVE_FIELD_MAP.get(doctype, {}).items():
+        if native_field:
+            changed |= _fill(native_doc, native_field, bp_doc.get(bp_field))
+    for fieldname in _scalar_custom_fields(doctype):
+        changed |= _fill(native_doc, fieldname, bp_doc.get(fieldname[len("custom_") :]))
+    return changed
+
+
 def _copy_values(bp_doc, native_doc, doctype):
     """Copy BP values across, honouring NATIVE_FIELD_MAP first."""
     for bp_field, native_field in NATIVE_FIELD_MAP.get(doctype, {}).items():
@@ -129,12 +196,20 @@ def _existing_target(bp_doctype, bp_name, anchor_field, native_doctype):
 
 def migrate_project(bp_name):
     """Return the native Project for a BP Project, creating it if needed."""
-    existing = _existing_target("BP Project", bp_name, "erpnext_project", "Project")
-    if existing:
-        return existing
-
     bp = frappe.get_doc("BP Project", bp_name)
     status, is_active = _PROJECT_STATUS.get(bp.get("status"), ("Open", "Yes"))
+
+    existing = _existing_target("BP Project", bp_name, "erpnext_project", "Project")
+    if existing:
+        native = frappe.get_doc("Project", existing)
+        changed = _backfill(bp, native, "Project")
+        # Translated enums are authoritative — the bridge left these at its own
+        # defaults (an Archived BP project showed as Open / is_active Yes).
+        changed |= _fill(native, "status", status, authoritative=True)
+        changed |= _fill(native, "is_active", is_active, authoritative=True)
+        if changed:
+            native.save(ignore_permissions=True)
+        return existing
 
     native = frappe.new_doc("Project")
     # project_name and company are mandatory on native Project.
@@ -153,11 +228,23 @@ def migrate_project(bp_name):
 
 def migrate_task(bp_name, project_map=None):
     """Return the native Task for a BP Task, creating it if needed."""
+    bp = frappe.get_doc("BP Task", bp_name)
+
     existing = _existing_target("BP Task", bp_name, "erpnext_task", "Task")
     if existing:
+        native = frappe.get_doc("Task", existing)
+        changed = _backfill(bp, native, "Task")
+        cats = _workflow_categories(bp.project) if bp.get("project") else {}
+        cat = cats.get(str(bp.get("status")), "unstarted")
+        changed |= _fill(native, "status", _CATEGORY_TO_TASK_STATUS.get(cat, "Open"),
+                         authoritative=True)
+        if bp.get("priority"):
+            changed |= _fill(native, "priority", _TASK_PRIORITY.get(bp.priority, "Medium"),
+                             authoritative=True)
+        changed |= _fill(native, "custom_status_label", bp.get("status"), authoritative=True)
+        if changed:
+            native.save(ignore_permissions=True)
         return existing
-
-    bp = frappe.get_doc("BP Task", bp_name)
 
     native_project = None
     if bp.get("project"):
