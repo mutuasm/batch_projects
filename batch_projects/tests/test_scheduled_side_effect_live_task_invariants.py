@@ -29,7 +29,7 @@ Run with:
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import events
 
@@ -45,7 +45,7 @@ def _task_call_filters(get_all_mock):
     return None
 
 
-class TestReminderAndDigestExcludeDeletedTasks(FrappeTestCase):
+class TestReminderAndDigestExcludeDeletedTasks(IntegrationTestCase):
     def test_due_date_reminders_query_excludes_deleted_tasks(self):
         with patch.object(frappe, "get_all", return_value=[]) as get_all:
             events.send_due_date_reminders()
@@ -67,7 +67,7 @@ class TestReminderAndDigestExcludeDeletedTasks(FrappeTestCase):
         self.assertEqual(filters.get("is_deleted"), 0)
 
 
-class TestScheduledAutomationsExcludeDeletedTasks(FrappeTestCase):
+class TestScheduledAutomationsExcludeDeletedTasks(IntegrationTestCase):
     def test_due_soon_automations_query_excludes_deleted_tasks(self):
         with (
             patch(
@@ -113,7 +113,7 @@ def _digest_task(name, project="PROJ-A", status="Open", due_date=None):
     return frappe._dict(name=name, task_key=name, title=name, status=status, project=project, due_date=due_date, priority="Medium")
 
 
-class TestDailyDigestRevalidates(FrappeTestCase):
+class TestDailyDigestRevalidates(IntegrationTestCase):
     """send_daily_digest calls frappe.sendmail directly — it never reached
     _create_notification's is_notification_visible gate. Each task is now
     rechecked via notification_delivery.can_receive_task_delivery at the
@@ -215,7 +215,7 @@ class TestDailyDigestRevalidates(FrappeTestCase):
         self.assertEqual(sendmail.call_args.kwargs.get("delayed"), False)
 
 
-class TestWeeklySummaryRevalidates(FrappeTestCase):
+class TestWeeklySummaryRevalidates(IntegrationTestCase):
     def test_skips_a_manager_who_loses_project_access_after_candidate_query(self):
         project_row = frappe._dict(name="PROJ-A", project_name="Proj A", key="PA", lead="lead@example.com")
         with (
@@ -265,7 +265,7 @@ class TestWeeklySummaryRevalidates(FrappeTestCase):
         send_email.assert_not_called()
 
 
-class TestScheduledAutomationsRevalidate(FrappeTestCase):
+class TestScheduledAutomationsRevalidate(IntegrationTestCase):
     def test_due_soon_skips_a_task_trashed_between_query_and_dispatch(self):
         with (
             patch(
@@ -373,7 +373,7 @@ class TestScheduledAutomationsRevalidate(FrappeTestCase):
         evaluate.assert_not_called()
 
 
-class TestCreateNotificationAlreadyRevalidatesBeforeDispatch(FrappeTestCase):
+class TestCreateNotificationAlreadyRevalidatesBeforeDispatch(IntegrationTestCase):
     """Pins the pre-existing behavior send_due_date_reminders (specifically
     — not the other jobs above, see the module docstring) relies on:
     _create_notification already re-checks authorization immediately

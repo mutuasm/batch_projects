@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import task_validation as validation
 
@@ -27,7 +27,7 @@ class _Task:
         return getattr(self, key, None)
 
 
-class TestCompletionDependencyInvariant(FrappeTestCase):
+class TestCompletionDependencyInvariant(IntegrationTestCase):
     @patch.object(validation, "_force_dependency_override", return_value=False)
     @patch.object(validation.frappe, "get_all")
     @patch.object(validation.frappe, "get_cached_doc")
@@ -80,7 +80,7 @@ class TestCompletionDependencyInvariant(FrappeTestCase):
         get_project.assert_not_called()
 
 
-class TestForceDependencyOverrideAuthority(FrappeTestCase):
+class TestForceDependencyOverrideAuthority(IntegrationTestCase):
     """_force_dependency_override's actual body, not mocked out — a request-
     supplied `force` param must require Manager+ on the task's project;
     only the internal doc.flags path is unconditionally trusted."""

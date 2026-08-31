@@ -9,7 +9,7 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks, membership_invariants
 from batch_projects.api.board import create_project
@@ -46,7 +46,7 @@ def _delete_project(key):
     frappe.db.commit()
 
 
-class TestHooksWiring(FrappeTestCase):
+class TestHooksWiring(IntegrationTestCase):
     def test_update_project_members_override_registered(self):
         self.assertEqual(
             hooks.override_whitelisted_methods["batch_projects.api.board.update_project_members"],
@@ -60,7 +60,7 @@ class TestHooksWiring(FrappeTestCase):
         )
 
 
-class TestUserCanViewTask(FrappeTestCase):
+class TestUserCanViewTask(IntegrationTestCase):
     def test_instance_admin_always_sees_task(self):
         self.assertTrue(
             membership_invariants._user_can_view_task("P", "T", "Administrator")
@@ -117,7 +117,7 @@ class TestUserCanViewTask(FrappeTestCase):
             )
 
 
-class TestPruneStaleWatchersAndDelegation(FrappeTestCase):
+class TestPruneStaleWatchersAndDelegation(IntegrationTestCase):
     def setUp(self):
         frappe.set_user("Administrator")
         _delete_project(TEST_KEY)

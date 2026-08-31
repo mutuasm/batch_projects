@@ -66,14 +66,6 @@ def _action_dicts(doc) -> list[dict]:
     return result
 
 
-def _guard():
-    from batch_projects.entitlements import require_feature
-    from batch_projects.gateway_guard import verify_gateway_request
-
-    require_feature("automations")
-    verify_gateway_request()
-
-
 def _workspace_admin_required():
     from batch_projects import access
 
@@ -201,7 +193,6 @@ def list_workflows(project=None):
     ("scope=workspace", "scope=project", "project=X") each match
     independently, so scope="project" alone (with no project match) returned
     every OTHER project's workflows too. Two explicit queries avoid that."""
-    _guard()
 
     rows = []
     if project:
@@ -256,7 +247,6 @@ def test_workflow(name, task=None):
     workflow's own — a project-A admin could supply a project-B task and
     have project A's workflow execute its action nodes against project B's
     data. This adapter binds the resource before delegating."""
-    _guard()
     if not frappe.db.exists("BP Workflow", name):
         frappe.throw("Workflow not found.")
 

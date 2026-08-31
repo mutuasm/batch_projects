@@ -33,12 +33,12 @@ Run with:
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects.api import board
 
 
-class TestCommentEditEmitsRealtimeEvent(FrappeTestCase):
+class TestCommentEditEmitsRealtimeEvent(IntegrationTestCase):
     def _activity(self, comment_text="old text"):
         doc = MagicMock()
         doc.action_type = "Comment"
@@ -80,7 +80,7 @@ class TestCommentEditEmitsRealtimeEvent(FrappeTestCase):
         self.assertIn("comment.added", events_emitted)
 
 
-class TestCommentDeleteEmitsRealtimeEvent(FrappeTestCase):
+class TestCommentDeleteEmitsRealtimeEvent(IntegrationTestCase):
     def test_delete_emits_comment_deleted_with_the_activity_name(self):
         activity = MagicMock()
         activity.action_type = "Comment"
@@ -103,7 +103,7 @@ class TestCommentDeleteEmitsRealtimeEvent(FrappeTestCase):
         self.assertEqual(payload["task"], "TASK-1")
 
 
-class TestCommentEventTransactionOrdering(FrappeTestCase):
+class TestCommentEventTransactionOrdering(IntegrationTestCase):
     """emit()'s realtime broadcast is registered via frappe.db.after_commit
     (events._broadcast, after_commit=True) — calling it AFTER an explicit
     commit defers the registration to whatever the NEXT commit happens to
@@ -151,7 +151,7 @@ class TestCommentEventTransactionOrdering(FrappeTestCase):
         self.assertEqual(order, ["emit", "commit"])
 
 
-class TestTrashRestoreAutomationTriggerMetadata(FrappeTestCase):
+class TestTrashRestoreAutomationTriggerMetadata(IntegrationTestCase):
     def test_trashed_and_restored_are_selectable_task_event_triggers(self):
         from batch_projects.api.automation import _NODE_REGISTRY
 
@@ -184,7 +184,7 @@ class TestTrashRestoreAutomationTriggerMetadata(FrappeTestCase):
         self.assertIn("task.restored", values)
 
 
-class TestTrashRestoreRuleDocumentPersistence(FrappeTestCase):
+class TestTrashRestoreRuleDocumentPersistence(IntegrationTestCase):
     """Real DB round-trip: this is the thing that was actually broken —
     Frappe's own Select-field validation rejected trigger_event=task.trashed
     outright before the DocType JSON was corrected, regardless of what any

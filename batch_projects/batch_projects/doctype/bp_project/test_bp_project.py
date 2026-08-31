@@ -5,7 +5,7 @@
 import json
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects.api.board import create_project
 
@@ -13,7 +13,7 @@ from batch_projects.api.board import create_project
 # Frappe's full-app bootstrap otherwise follows optional ERPNext Links from
 # BP Project into unrelated finance/payment fixture graphs. None of these
 # external records is a fixture prerequisite for the lifecycle tests below.
-test_ignore = [
+IGNORE_TEST_RECORD_DEPENDENCIES = [
     "Company",
     "Customer",
     "Lead",
@@ -63,7 +63,7 @@ def make_project(key=TEST_KEY, **overrides):
     return create_project(**params)
 
 
-class TestBPProject(FrappeTestCase):
+class TestBPProject(IntegrationTestCase):
     def setUp(self):
         frappe.set_user("Administrator")
         delete_project_fixture(TEST_KEY)

@@ -83,10 +83,6 @@ class TestBillingPreviewParity(unittest.TestCase):
         with (
             patch.object(
                 erp_link,
-                "require_feature",
-            ),
-            patch.object(
-                erp_link,
                 "_require_system_user",
             ),
             patch(

@@ -116,8 +116,6 @@ def _send_invite_email(inv, project_title: str, new_account: bool):
 def invite_member(project, email, role="Member"):
     """Invite someone (by email) to a project. Admin only.
     Creates a System User account if the email isn't registered yet."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     access.require(project, "Admin")
 
     email = _normalize_email(email)
@@ -213,8 +211,6 @@ def _is_fresh_guest(user: str) -> bool:
 @frappe.whitelist()
 def list_invitations(project, include_resolved=0):
     """Pending (and optionally resolved) invitations for a project. Manager+."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     access.require(project, "Manager")
     filters = {"project": project}
     if not int(include_resolved or 0):
@@ -235,8 +231,6 @@ def list_invitations(project, include_resolved=0):
 
 @frappe.whitelist()
 def revoke_invitation(name):
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     inv = frappe.get_doc("BP Invitation", name)
     access.require(inv.project, "Admin")
     if inv.status != "Pending":
@@ -249,8 +243,6 @@ def revoke_invitation(name):
 
 @frappe.whitelist()
 def resend_invitation(name):
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     inv = frappe.get_doc("BP Invitation", name)
     access.require(inv.project, "Admin")
     if inv.status != "Pending":
@@ -311,8 +303,6 @@ def _accept_state(invite_email: str, session_user: str | None) -> str:
 def _finalize_accept(inv, user):
     """Add membership + mark the invitation accepted. Caller has authenticated
     `user` and verified the email matches."""
-    from batch_projects.entitlements import assert_seat_available
-    assert_seat_available(user)
     _add_membership(inv.project, user, inv.role)
     inv.status = "Accepted"
     inv.accepted_user = user
@@ -374,8 +364,6 @@ def signup_and_accept(token, password, full_name=None):
 @frappe.whitelist()
 def accept_invitation(token):
     """Accept as the currently logged-in user (email must match the invite)."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     if frappe.session.user == "Guest":
         frappe.throw(_("Please log in to accept this invitation."),
                      frappe.PermissionError)

@@ -22,12 +22,8 @@ def _sql_values(values) -> str:
 
 def _scope(user: str):
     """Return (visible_projects, direct_tasks), None projects means all."""
-    from batch_projects.permissions import _rebac_scope, get_accessible_projects
+    from batch_projects.permissions import get_accessible_projects
 
-    rebac = _rebac_scope(user)
-    if rebac is not None:
-        projects, tasks = rebac
-        return set(projects or []), set(tasks or [])
     projects = get_accessible_projects(user)
     if projects is None:
         return None, set()

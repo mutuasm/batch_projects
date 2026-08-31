@@ -4,12 +4,11 @@ batch_projects/api/sprint_analytics.py
 Whitelisted endpoints for sprint/agile analytics.
 
 Every endpoint:
-  1. Verifies the request came through bp-gateway (gateway_guard)
-  2. Checks project-level permissions via access.require()
-  3. Reads from Redis cache when available (cache.py)
-  4. Computes fresh analytics on cache miss (analytics.py)
-  5. Writes to cache with TTL
-  6. Returns clean JSON
+  1. Checks project-level permissions via access.require()
+  2. Reads from Redis cache when available (cache.py)
+  3. Computes fresh analytics on cache miss (analytics.py)
+  4. Writes to cache with TTL
+  5. Returns clean JSON
 
 Cache strategy: analytics data has a longer TTL than board data (120s vs 60s)
 because burndown/velocity/cycle-time don't change as frequently as task drags
@@ -41,8 +40,6 @@ def get_sprint_health(sprint):
 
     GET /api/method/batch_projects.api.sprint_analytics.get_sprint_health?sprint=SPRINT-0001
     """
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
     sprint_doc = frappe.get_doc("BP Sprint", sprint)
     project = sprint_doc.project

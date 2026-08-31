@@ -74,7 +74,6 @@ class TestBillingHoursInvariant(unittest.TestCase):
         ]
 
         with (
-            patch.object(erp_link, "require_feature"),
             patch.object(erp_link, "_require_system_user"),
             patch("batch_projects.permissions.get_accessible_projects", return_value=None),
             patch.object(erp_link.frappe, "get_all", return_value=[project]),

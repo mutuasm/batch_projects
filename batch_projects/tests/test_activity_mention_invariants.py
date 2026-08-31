@@ -13,14 +13,14 @@ Run with:
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
 def _mention(name, uid):
     return f"@[{name}]({uid})"
 
 
-class TestActivityMentionInvariant(FrappeTestCase):
+class TestActivityMentionInvariant(IntegrationTestCase):
     def test_comment_mentioning_unauthorized_user_is_rejected(self):
         activity = frappe.get_doc({
             "doctype": "BP Activity",

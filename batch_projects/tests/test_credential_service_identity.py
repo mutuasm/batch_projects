@@ -8,7 +8,7 @@ import hmac
 import unittest
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects.api.credentials import (
     _GATEWAY_CREDENTIAL_PATH,
@@ -35,7 +35,7 @@ def _signed_headers(nonce="0123456789abcdef0123456789abcdef", timestamp=_NOW, bo
     }
 
 
-class TestCredentialServiceIdentity(FrappeTestCase):
+class TestCredentialServiceIdentity(IntegrationTestCase):
 
     def test_gateway_service_signature_is_accepted(self):
         claimed = []

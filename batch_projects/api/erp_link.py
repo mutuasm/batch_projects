@@ -20,7 +20,7 @@ import frappe
 from frappe.utils import flt, add_days, nowdate
 
 from batch_projects.api.board import _check_permission, _require_system_user
-from batch_projects.entitlements import require_feature, require_workspace_feature
+from batch_projects.entitlements import require_workspace_feature
 from batch_projects.billing_reservation import (
     guard_timesheet_details,
     get_live_claimed_timesheet_details,
@@ -213,7 +213,6 @@ def create_project_from_sales_order(sales_order, template=None, tasks_from_items
     Idempotent — a second call on an already-stamped SO refuses with the
     existing project named."""
     _require_system_user()
-    require_feature("integrations")
 
     so = frappe.get_doc("Sales Order", sales_order)
     so.check_permission("write")  # about to stamp it; write implies read
@@ -366,7 +365,6 @@ def create_project_from_lead(lead, project_name=None):
     means "came FROM this existing customer", not "bill this customer", so
     it's deliberately not used here) and the Lead itself just gets tagged."""
     _require_system_user()
-    require_feature("integrations")
 
     doc = frappe.get_doc("Lead", lead)
     doc.check_permission("write")
@@ -397,7 +395,6 @@ def suggest_project_name_for_opportunity(opportunity):
 @frappe.whitelist()
 def create_project_from_opportunity(opportunity, tasks_from_items=1, project_name=None):
     _require_system_user()
-    require_feature("integrations")
 
     doc = frappe.get_doc("Opportunity", opportunity)
     doc.check_permission("write")
@@ -442,7 +439,6 @@ def suggest_project_name_for_quotation(quotation):
 @frappe.whitelist()
 def create_project_from_quotation(quotation, tasks_from_items=1, project_name=None):
     _require_system_user()
-    require_feature("integrations")
 
     doc = frappe.get_doc("Quotation", quotation)
     doc.check_permission("write")
@@ -1158,7 +1154,6 @@ def generate_invoice(project, period=None, tasks=None,
     for _p in project_names:
         _check_permission(_p, "BP Admin")
         access.require_capability(_p, "view_money")
-    require_feature("billing_writeback")
 
     # Financial selectors must never be accepted and then ignored. Validate
     # this before candidate SQL, source reservation, pricing or draft creation.
@@ -1559,7 +1554,6 @@ def get_batch_invoice_candidates():
     offer something that would then be refused, or hide something that would
     be billed. Rate resolution uses the same hierarchy too, so the amount
     shown is the amount that will be invoiced."""
-    require_feature("billing_writeback")
     _require_system_user()
 
     from batch_projects.permissions import get_accessible_projects
@@ -1849,7 +1843,6 @@ def generate_milestone_invoice(milestone):
     _check_permission(doc.project, "BP Admin")
     from batch_projects import access
     access.require_capability(doc.project, "view_money")
-    require_feature("billing_writeback")
 
     # Billing eligibility was checked on an unlocked snapshot above only for
     # authorization. Financial state is re-read after deterministic locks:
@@ -2003,7 +1996,6 @@ def generate_expense_invoice(project):
     _check_permission(project, "BP Admin")
     from batch_projects import access
     access.require_capability(project, "view_money")
-    require_feature("billing_writeback")
 
     doc = frappe.get_doc("BP Project", project)
     if not doc.erpnext_project:
@@ -2168,7 +2160,6 @@ def create_purchase_order_from_task(task, supplier, items):
     erpnext requires it (`reqd: 1`) on every Purchase Order Item; there is no
     free-text-only row (verified, docs/PLAN-phase9-task-costing.md)."""
     _require_system_user()
-    require_feature("integrations")
 
     if isinstance(items, str):
         items = json.loads(items)
@@ -2474,7 +2465,6 @@ def get_erp_doc_summary(project, doctype, name):
     _check_permission(project, "BP Viewer")
     from batch_projects import access
     access.require_capability(project, "view_money")
-    require_feature("profitability")
     require_workspace_feature("money_tab")
 
     spec = _DOC_SPECS.get(doctype)
@@ -2706,7 +2696,6 @@ def submit_timesheet(project, timesheet):
     (SI/PI/SO) are never submitted from here — that stays a deliberate act
     in ERPNext, same precedent as generate_invoice's draft-only return."""
     _check_permission(project, "BP Admin")
-    require_feature("time_tracking")
     require_workspace_feature("timesheets")
 
     # Respect Timesheet Approval mode. When set to "Manager
@@ -2846,13 +2835,6 @@ def _auto_link_erpnext_project(project):
     if not company:
         return
 
-    # Honour the entitlements gate (reads 24h-cached tier; no-ops if lapsed).
-    try:
-        from batch_projects.entitlements import require_feature
-        require_feature("integrations")
-    except Exception:
-        return
-
     erp_doc = frappe.get_doc({
         "doctype": "Project",
         "project_name": doc.project_name,
@@ -2917,14 +2899,6 @@ def reconcile_erpnext_sync():
     document hooks (bp_project.py on_update) bail immediately on every
     frappe.db.set_value call inside the helpers.
     """
-    from batch_projects.entitlements import require_feature
-
-    # Honour entitlements (reads 24h-cached tier; no-ops if lapsed).
-    try:
-        require_feature("integrations")
-    except Exception:
-        return
-
     frappe.flags.in_bp_project_sync = True
     stats = {"auto_linked": 0, "synced": 0, "skipped": 0, "failed": 0}
 

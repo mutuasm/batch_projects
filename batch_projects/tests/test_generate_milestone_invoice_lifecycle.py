@@ -94,10 +94,6 @@ class TestGenerateMilestoneInvoiceLifecycle(unittest.TestCase):
             patch(
                 "batch_projects.access.require_capability",
             ),
-            patch.object(
-                erp_link,
-                "require_feature",
-            ),
             patch(
                 "batch_projects.milestone_billing.lock_generation_scope",
                 return_value=(
@@ -182,10 +178,6 @@ class TestGenerateMilestoneInvoiceLifecycle(unittest.TestCase):
             ),
             patch(
                 "batch_projects.access.require_capability",
-            ),
-            patch.object(
-                erp_link,
-                "require_feature",
             ),
             patch(
                 "batch_projects.milestone_billing.lock_generation_scope",

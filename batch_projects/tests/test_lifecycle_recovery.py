@@ -14,14 +14,13 @@ and test_*_recovery.py files in this directory.
 
 from unittest.mock import patch, MagicMock
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import random_string
 from batch_projects.api import board
 from batch_projects.api import sharing
 from batch_projects.api import automation_schedule_data
 from batch_projects.api import project_templates
 from batch_projects.task_validation import require_live_task, validate_live_task_edits
-from batch_projects import entitlements
 
 # The real database sql method, bound once at import before any test patches
 # frappe.db.sql. Side-effect delegation must route through this, not through
@@ -30,7 +29,7 @@ _REAL_DB_SQL = frappe.db.sql
 _REAL_GET_DOC = frappe.get_doc
 
 
-class TestTrashBoundaryEnforcement(FrappeTestCase):
+class TestTrashBoundaryEnforcement(IntegrationTestCase):
     """P1-5: Trash boundary — trashed tasks rejected at mutation and read."""
 
     def setUp(self):
@@ -39,17 +38,17 @@ class TestTrashBoundaryEnforcement(FrappeTestCase):
         self._team = None
 
     def tearDown(self):
-        if self._task and frappe.db.exists("BP Task", self._task):
+        if isinstance(self._task, str) and frappe.db.exists("BP Task", self._task):
             try:
                 frappe.delete_doc("BP Task", self._task, ignore_permissions=True, force=True)
             except Exception:
                 pass
-        if self._project and frappe.db.exists("BP Project", self._project):
+        if isinstance(self._project, str) and frappe.db.exists("BP Project", self._project):
             try:
                 frappe.delete_doc("BP Project", self._project, ignore_permissions=True, force=True)
             except Exception:
                 pass
-        if self._team and frappe.db.exists("BP Team", self._team):
+        if isinstance(self._team, str) and frappe.db.exists("BP Team", self._team):
             try:
                 frappe.delete_doc("BP Team", self._team, ignore_permissions=True, force=True)
             except Exception:
@@ -146,7 +145,7 @@ class TestTrashBoundaryEnforcement(FrappeTestCase):
             sharing.update_shared_task("fake-token", "TASK-1", {"title": "Updated"})
 
 
-class TestSeatCapacityAndTeamREST(FrappeTestCase):
+class TestSeatCapacityAndTeamREST(IntegrationTestCase):
     """P1-6: Seat capacity validation and team permission hooks."""
 
     def setUp(self):
@@ -155,12 +154,12 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
         self._users = []
 
     def tearDown(self):
-        if self._project and frappe.db.exists("BP Project", self._project):
+        if isinstance(self._project, str) and frappe.db.exists("BP Project", self._project):
             try:
                 frappe.delete_doc("BP Project", self._project, ignore_permissions=True, force=True)
             except Exception:
                 pass
-        if self._team and frappe.db.exists("BP Team", self._team):
+        if isinstance(self._team, str) and frappe.db.exists("BP Team", self._team):
             try:
                 frappe.delete_doc("BP Team", self._team, ignore_permissions=True, force=True)
             except Exception:
@@ -213,36 +212,9 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
         self._team = doc.name
         return doc.name
 
-    @patch.object(entitlements, "assert_seats_available")
-    def test_project_member_addition_checks_seats(self, assert_seats):
-        """BP Project member addition triggers seat validation."""
-        proj = self._make_project()
-        user = self._make_user()
-        
-        # Simulate adding a member
-        pdoc = frappe.get_doc("BP Project", proj)
-        pdoc.append("members", {"user": user, "role": "Member"})
-        pdoc.save(ignore_permissions=True)
-        
-        # assert_seats_available should have been called
-        self.assertTrue(assert_seats.called)
-
-    @patch.object(entitlements, "assert_seats_available")
-    def test_team_validate_checks_new_member_seats(self, assert_seats):
-        """BP Team validate() checks seats for new members."""
-        team = self._make_team()
-        user = self._make_user()
-        
-        tdoc = frappe.get_doc("BP Team", team)
-        tdoc.append("members", {"user": user, "role": "Member"})
-        tdoc.save(ignore_permissions=True)
-        
-        self.assertTrue(assert_seats.called)
-
-    @patch.object(entitlements, "assert_seats_available")
     @patch("batch_projects.api.board.frappe.db.sql")
-    def test_update_project_members_uses_advisory_lock(self, sql, assert_seats):
-        """update_project_members uses GET_LOCK for seat decision atomicity."""
+    def test_update_project_members_uses_advisory_lock(self, sql):
+        """update_project_members uses GET_LOCK for member-write atomicity."""
         def sql_side_effect(query, *args, **kwargs):
             if "GET_LOCK" in str(query):
                 return [[1]]
@@ -262,7 +234,7 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
         self.assertTrue(len(lock_calls) > 0)
 
 
-class TestScheduleDataIntegrity(FrappeTestCase):
+class TestScheduleDataIntegrity(IntegrationTestCase):
     """P1-7: Schedule data FOR UPDATE locks and trash filters."""
 
     def setUp(self):
@@ -270,12 +242,12 @@ class TestScheduleDataIntegrity(FrappeTestCase):
         self._task = None
 
     def tearDown(self):
-        if self._task and frappe.db.exists("BP Task", self._task):
+        if isinstance(self._task, str) and frappe.db.exists("BP Task", self._task):
             try:
                 frappe.delete_doc("BP Task", self._task, ignore_permissions=True, force=True)
             except Exception:
                 pass
-        if self._project and frappe.db.exists("BP Project", self._project):
+        if isinstance(self._project, str) and frappe.db.exists("BP Project", self._project):
             try:
                 frappe.delete_doc("BP Project", self._project, ignore_permissions=True, force=True)
             except Exception:
@@ -385,7 +357,7 @@ class TestScheduleDataIntegrity(FrappeTestCase):
         )
 
 
-class TestQueryFilters(FrappeTestCase):
+class TestQueryFilters(IntegrationTestCase):
     """P1-8: Sprint/velocity/dashboard/capacity/template filters."""
 
     def setUp(self):
@@ -395,22 +367,22 @@ class TestQueryFilters(FrappeTestCase):
         self._team = None
 
     def tearDown(self):
-        if self._task and frappe.db.exists("BP Task", self._task):
+        if isinstance(self._task, str) and frappe.db.exists("BP Task", self._task):
             try:
                 frappe.delete_doc("BP Task", self._task, ignore_permissions=True, force=True)
             except Exception:
                 pass
-        if self._sprint and frappe.db.exists("BP Sprint", self._sprint):
+        if isinstance(self._sprint, str) and frappe.db.exists("BP Sprint", self._sprint):
             try:
                 frappe.delete_doc("BP Sprint", self._sprint, ignore_permissions=True, force=True)
             except Exception:
                 pass
-        if self._project and frappe.db.exists("BP Project", self._project):
+        if isinstance(self._project, str) and frappe.db.exists("BP Project", self._project):
             try:
                 frappe.delete_doc("BP Project", self._project, ignore_permissions=True, force=True)
             except Exception:
                 pass
-        if self._team and frappe.db.exists("BP Team", self._team):
+        if isinstance(self._team, str) and frappe.db.exists("BP Team", self._team):
             try:
                 frappe.delete_doc("BP Team", self._team, ignore_permissions=True, force=True)
             except Exception:
@@ -509,10 +481,17 @@ class TestQueryFilters(FrappeTestCase):
     @patch.object(board.frappe, "get_doc")
     def test_get_sprint_capacity_filters_trash(self, get_doc, get_all, check_perm):
         """get_sprint_capacity includes is_deleted:0."""
-        proj = self._make_project()
-        team = self._make_team()
-        sprint = self._make_sprint(proj, team)
-        
+        # No _make_* helpers here: this test patches board.frappe.get_doc, and
+        # board.frappe is the frappe module itself, so frappe.get_doc is mocked
+        # for the whole method. The helpers would insert nothing and return
+        # MagicMocks, which then reach frappe.db.exists in tearDown — on v16
+        # that raises "Unsupported filters type: MagicMock" (v16 added strict
+        # filter-type validation in frappe/database/query.py; v15 silently
+        # tolerated it). get_doc/get_all/_check_permission are all mocked, so
+        # plain identifiers are sufficient and honest here.
+        proj = "BP-PROJ-CAPACITY"
+        sprint = "BP-SPRINT-CAPACITY"
+
         mock_sprint = MagicMock()
         mock_sprint.project = proj
         mock_sprint.sprint_name = "Sprint 1"

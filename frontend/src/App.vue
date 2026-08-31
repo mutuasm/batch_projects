@@ -33,20 +33,6 @@
         </button>
       </div>
 
-      <!-- Subscription status banner -->
-      <div v-if="!isPublicRoute && entitlements.isExpired"
-           class="shrink-0 bg-red-600 text-white text-[13px] font-medium text-center py-2 px-4">
-        Your license has expired.
-        <a href="/workspace/pricing" class="underline font-semibold hover:text-red-100">Renew now</a>
-        to restore access to paid features.
-      </div>
-      <div v-else-if="!isPublicRoute && entitlements.isExpiringSoon"
-           class="shrink-0 bg-amber-500 text-white text-[13px] font-medium text-center py-2 px-4">
-        Your license expires in {{ entitlements.daysRemaining }} day{{ entitlements.daysRemaining === 1 ? '' : 's' }}.
-        <a href="/workspace/pricing" class="underline font-semibold hover:text-amber-100">Renew now</a>
-        to avoid interruption.
-      </div>
-
       <ProjectHeader v-if="isProjectRoute" @open-search="showSearch = true" />
 
       <!-- Main content — add pb-16 on mobile for bottom nav -->

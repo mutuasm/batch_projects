@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks
 from batch_projects import task_defaults
@@ -39,7 +39,7 @@ class _Task:
         return True
 
 
-class TestDefaultAssigneeHooks(FrappeTestCase):
+class TestDefaultAssigneeHooks(IntegrationTestCase):
     def test_task_hooks_route_through_default_adapter(self):
         task_hooks = hooks.doc_events["BP Task"]
         self.assertEqual(task_hooks["before_insert"], "batch_projects.task_defaults.before_task_insert")
@@ -47,7 +47,7 @@ class TestDefaultAssigneeHooks(FrappeTestCase):
         self.assertEqual(task_hooks["validate"], "batch_projects.task_validation.validate_task")
 
 
-class TestDefaultMaterialization(FrappeTestCase):
+class TestDefaultMaterialization(IntegrationTestCase):
     @patch.object(task_defaults.task_invariants, "_assert_assignable_user")
     @patch.object(task_defaults.frappe.db, "get_value")
     def test_project_default_becomes_real_assignee_when_none_explicit(self, get_value, assignable):
@@ -111,8 +111,7 @@ class TestDefaultMaterialization(FrappeTestCase):
         mentions.assert_called_once()
 
 
-class TestDefaultAssignmentLifecycle(FrappeTestCase):
-    @patch("batch_projects.events._sync_rebac")
+class TestDefaultAssignmentLifecycle(IntegrationTestCase):
     @patch("batch_projects.events._evaluate_automations")
     @patch("batch_projects.events._broadcast")
     @patch("batch_projects.events._invalidate_cache")
@@ -121,7 +120,7 @@ class TestDefaultAssignmentLifecycle(FrappeTestCase):
     @patch.object(task_defaults.frappe, "get_doc")
     @patch.object(task_defaults.frappe.db, "get_value")
     def test_default_assignment_dispatches_real_edge_without_second_notification(
-        self, get_value, get_doc, add_watcher, enrich, invalidate, broadcast, automation, rebac
+        self, get_value, get_doc, add_watcher, enrich, invalidate, broadcast, automation
     ):
         task = _Task([SimpleNamespace(user="default@example.com", full_name="Default User")])
         task.flags.bp_default_assignee_materialized = "default@example.com"
@@ -145,7 +144,6 @@ class TestDefaultAssignmentLifecycle(FrappeTestCase):
         invalidate.assert_called_once()
         broadcast.assert_called_once()
         automation.assert_called_once()
-        rebac.assert_called_once()
 
         # The adapter intentionally never calls events._queue_notifications;
         # the earlier task.created event supplies the one legacy notification.

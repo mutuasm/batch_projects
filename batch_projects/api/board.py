@@ -39,8 +39,6 @@ def get_my_capabilities(project):
     blob: a role can change (membership edit, project archived) mid-TTL
     without a mutation that bumps the project's cache generation. Cheap
     enough to call on every project switch."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
     from batch_projects import access
     role = access.get_effective_role(project)
@@ -57,8 +55,6 @@ def _check_permission(project: str, required_role: str, allow_archived: bool = F
     Viewer (read-only), so this now correctly blocks their writes instead of
     relying on an accidental doctype-permission failure downstream.
     Also verifies the request came through the bp-gateway."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
     from batch_projects import access
     access.require(project, required_role, allow_archived=allow_archived)
@@ -70,19 +66,13 @@ def _check_task_permission(task: str, project: str, required_role: str):
     without project membership (access.require_task). Use only at endpoints
     scoped to exactly ONE task (get_task, update_task, the timer); never for
     anything that lists or touches sibling tasks or the project itself."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
     from batch_projects import access
     access.require_task(task, project, required_role)
 
 
 def _require_system_user():
-    """Block website/guest users from calling any BP API endpoint.
-    Also verifies the request came through the bp-gateway (gateway_guard.py).
-    Direct-to-Frappe calls missing the gateway signature are rejected."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
+    """Block website/guest users from calling any BP API endpoint."""
 
     user = frappe.session.user
     if "System Manager" in frappe.get_roles(user):
@@ -295,13 +285,14 @@ def _normalize_allowed_to(allowed, valid_names):
 def get_session_info():
     """Returns current session user, csrf_token and sitename. Used by SPA to bootstrap socket auth.
 
-    Also carries app_version/gateway_min_version — unauthenticated and
-    pre-bridge (see gateway_guard._PRE_BRIDGE_PATHS), so both the gateway
-    (boot-time compat self-check) and the gateway installer (version
-    resolution) can read this before any session/bridge exists.
+    Also carries app_version, readable unauthenticated so a client can check
+    which BatchProjects release it is talking to before any session exists.
+
+    `gateway_min_version` was dropped in 2.0.0 along with the gateway itself.
+    The key is still emitted as null so an older client that reads it does not
+    KeyError mid-bootstrap.
     """
     from batch_projects import __version__ as app_version
-    from batch_projects.hooks import gateway_min_version
 
     return {
         "user": frappe.session.user,
@@ -309,7 +300,7 @@ def get_session_info():
         "csrf_token": frappe.sessions.get_csrf_token(),
         "sitename": frappe.local.site,
         "app_version": app_version,
-        "gateway_min_version": gateway_min_version,
+        "gateway_min_version": None,
     }
 
 
@@ -2307,91 +2298,6 @@ def get_member_projects(user=None):
     return {"all": False, "projects": sorted(accessible or [])}
 
 
-_REBAC_SYNC_RESOURCES = {
-    "projects": ("BP Project", ["name as project"]),
-    "project_members": ("BP Project Member", ["parent as project", "user", "role"]),
-    "tasks": ("BP Task", ["name as task", "project"]),
-    "task_assignees": ("BP Task Assignee", ["parent as task", "user"]),
-}
-
-
-@frappe.whitelist()
-def sync_rebac_state(resource, offset=0, limit=500):
-    """Full-rebuild dump for the gateway's OpenFGA store after a flush — the
-    Frappe-side half of "MariaDB is the source of truth, OpenFGA is a
-    materialized view rebuilt from it" (docs/APP-OVERVIEW.md §5.3).
-    Service-caller only, same credential get_member_projects/
-    list_active_rules already trust — this returns company-wide data with
-    no project scoping at all, which is only ever appropriate for the
-    gateway's own rebuild routine.
-
-    resource: one of _REBAC_SYNC_RESOURCES. Paginated (offset/limit,
-    capped at 1000) — an install with tens of thousands of tasks must
-    never be dumped in one unbounded query; the caller pages until
-    has_more is false."""
-    _assert_service_caller()
-
-    spec = _REBAC_SYNC_RESOURCES.get(resource)
-    if not spec:
-        frappe.throw(
-            f"Unknown resource '{resource}'. Expected one of: "
-            f"{', '.join(sorted(_REBAC_SYNC_RESOURCES))}."
-        )
-    doctype, fields = spec
-
-    offset = max(int(offset or 0), 0)
-    limit = min(max(int(limit or 500), 1), 1000)
-
-    if resource == "tasks":
-        # A full rebuild must not recreate ReBAC tuples for trashed tasks —
-        # see _task_filters' doc comment: frappe.get_all always runs with
-        # ignore_permissions=True and skips the permission_query_conditions
-        # hook, so this exclusion has to be explicit here too, same as every
-        # other BP Task get_all call site.
-        rows = frappe.get_all(
-            doctype, fields=fields, filters=_task_filters(),
-            limit_start=offset, limit_page_length=limit,
-            order_by="creation asc",
-        )
-    elif resource == "task_assignees":
-        # BP Task Assignee is a child table with no is_deleted of its own —
-        # trashed-ness lives on the parent BP Task. get_all can't filter a
-        # child table by a joined parent field, so this is a raw join
-        # (matching the frappe.db.sql convention already used elsewhere in
-        # this module, e.g. the status-count query above) rather than a
-        # two-step fetch-then-filter that would break pagination.
-        rows = frappe.db.sql(
-            """
-            SELECT ta.parent AS task, ta.user AS user
-            FROM `tabBP Task Assignee` ta
-            INNER JOIN `tabBP Task` t ON t.name = ta.parent
-            WHERE t.is_deleted = 0
-            ORDER BY ta.creation ASC
-            LIMIT %(limit)s OFFSET %(offset)s
-            """,
-            {"limit": limit, "offset": offset},
-            as_dict=True,
-        )
-    else:
-        rows = frappe.get_all(
-            doctype, fields=fields,
-            limit_start=offset, limit_page_length=limit,
-            order_by="creation asc",
-        )
-    if resource == "project_members":
-        # Legacy rows can carry the "BP "-prefixed alias (BP Admin/BP Manager/
-        # ...) — normalize here so the gateway only ever sees the canonical
-        # spelling model.fga's relation names are lowercased from
-        # ("admin"/"manager"/"member"/"viewer"), same as access.normalize_role.
-        from batch_projects.access import normalize_role
-        for r in rows:
-            r["role"] = normalize_role(r.get("role"))
-
-    return {
-        "items": rows,
-        "has_more": len(rows) == limit,
-        "next_offset": offset + len(rows),
-    }
 
 
 @frappe.whitelist()
@@ -4383,8 +4289,6 @@ def complete_sprint(sprint, move_incomplete_to=None):
 def create_automation_rule(project, rule_name, trigger_event, action_type,
                            conditions=None, action_config=None, is_active=1):
     _check_permission(project, "BP Admin")
-    from batch_projects.entitlements import require_feature
-    require_feature("automations")
 
     doc = frappe.get_doc({
         "doctype": "BP Automation Rule",
@@ -4528,11 +4432,7 @@ def create_project(
     doc.insert(ignore_permissions=True)
 
     # Auto-add creator as Admin member so they have full access.
-    # Must check seat cap before the direct-SQL insert (which bypasses the
-    # doc_events hook in hooks.py).
     creator = frappe.session.user
-    from batch_projects.entitlements import assert_seat_available
-    assert_seat_available(creator)
     from batch_projects import access
     access.ensure_member_role(creator)
     frappe.db.sql(
@@ -4806,8 +4706,6 @@ def create_team(team_name, team_key=None, team_color="#0052CC", team_icon=None,
 	# managing the team they just made (update_team / members require Admin).
 	creator = frappe.session.user
 	if creator not in ("Administrator", "Guest"):
-		from batch_projects.entitlements import assert_seat_available
-		assert_seat_available(creator)
 		doc.append("members", {
 			"user": creator,
 			"full_name": frappe.db.get_value("User", creator, "full_name") or creator,
@@ -7759,18 +7657,11 @@ def update_project_members(project, members):
         )
 
     try:
-        # Enforce seat cap for new members not already in this project.
-        # Existing members keep their seat; users already seated elsewhere
-        # via another project are also fine (assert_seat_available handles
-        # is_seated internally).
         current = frappe.get_all("BP Project Member",
             filters={"parent": project},
             fields=["user", "role"])
         current_users = {m["user"] for m in current}
         old_roles = {m["user"]: m["role"] for m in current}
-        from batch_projects.entitlements import assert_seats_available, is_seated
-        new_users = {m["user"] for m in clean if not is_seated(m["user"])}
-        assert_seats_available(len(new_users))
 
         from batch_projects import access
         for u in {m["user"] for m in clean} - current_users:
@@ -8866,10 +8757,6 @@ def toggle_automation_rule(rule, is_active):
     doc = frappe.get_doc("BP Automation Rule", rule)
     _check_permission(doc.project, "BP Admin")
     active = _as_bool(is_active)
-    if active:
-        # Enabling consumes the premium feature; disabling is always allowed.
-        from batch_projects.entitlements import require_feature
-        require_feature("automations")
     doc.is_active = active
     doc.save(ignore_permissions=True)
     frappe.db.commit()
@@ -8883,8 +8770,6 @@ def update_automation_rule(rule, rule_name=None, trigger_event=None, action_type
                            conditions=None, action_config=None, is_active=None):
     doc = frappe.get_doc("BP Automation Rule", rule)
     _check_permission(doc.project, "BP Admin")
-    from batch_projects.entitlements import require_feature
-    require_feature("automations")
 
     if rule_name is not None:
         doc.rule_name = rule_name

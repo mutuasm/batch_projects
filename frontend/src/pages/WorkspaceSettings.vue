@@ -68,40 +68,21 @@
               <div class="bp-set-card">
                 <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                   <div>
-                    <p class="text-base font-medium text-foreground">Plan</p>
-                    <p class="text-sm text-muted mt-0.5">Current subscription tier.</p>
+                    <p class="text-base font-medium text-foreground">Edition</p>
+                    <p class="text-sm text-muted mt-0.5">BatchProjects ships as a single edition with every feature enabled.</p>
                   </div>
                   <div class="flex items-center gap-3">
                     <Chip size="sm" color="accent" variant="soft">{{ ent.tierLabel }}</Chip>
-                    <RouterLink to="/workspace/pricing" class="text-sm text-primary hover:underline">
-                      View plans
-                    </RouterLink>
                   </div>
                 </div>
-                <div v-if="ent.seatsTotal" class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
+                <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                   <div>
-                    <p class="text-base font-medium text-foreground">Seats</p>
-                    <p class="text-sm text-muted mt-0.5">Licensed seat cap for this install.</p>
+                    <p class="text-base font-medium text-foreground">Members</p>
+                    <p class="text-sm text-muted mt-0.5">Users holding a project or team membership. There is no seat limit.</p>
                   </div>
                   <p class="text-base text-foreground tabular-nums">
-                    {{ ent.seatsUsed }} of {{ ent.seatsTotal }} used
-                    <span v-if="ent.isAtCapacity" class="text-danger font-medium">— at capacity</span>
+                    {{ ent.seatsUsed }}
                   </p>
-                </div>
-                <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center border-t border-separator">
-                  <div>
-                    <p class="text-base font-medium text-foreground">Billing</p>
-                    <p class="text-sm text-muted mt-0.5">Manage subscription and payment methods.</p>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <RouterLink to="/workspace/pricing" class="text-sm text-primary hover:underline">
-                      Upgrade plan
-                    </RouterLink>
-                    <span class="text-sm text-muted">·</span>
-                    <button type="button" class="text-sm text-primary hover:underline" @click="openBillingPortal">
-                      Invoices &amp; payment method
-                    </button>
-                  </div>
                 </div>
                 <div class="py-6">
                   <p class="text-sm text-muted leading-relaxed">
@@ -773,7 +754,6 @@ import {
   getProjects,
   listProjectTemplates, updateProjectTemplate, deleteProjectTemplate, getProjectTemplate,
   getProjectTemplates,
-  getBillingPortal,
 } from '@/utils/api'
 import { useEntitlementsStore } from '@/stores/entitlements'
 import { fieldMeta } from '@/utils/customFields'
@@ -904,16 +884,6 @@ function flashSaved() {
   savedFlash.value = true
   clearTimeout(savedFlashTimer)
   savedFlashTimer = setTimeout(() => { savedFlash.value = false }, 2500)
-}
-
-async function openBillingPortal() {
-  try {
-    const res = await getBillingPortal()
-    if (res.portal_url) window.open(res.portal_url, '_blank')
-    else toast.error(res.detail || 'No billing portal available yet')
-  } catch (e) {
-    toast.error(e.message || 'Could not open billing portal')
-  }
 }
 
 // ── Features tab ─────────────────────────────────────────────────────────────

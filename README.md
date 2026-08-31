@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL v3"></a>
-  <a href="https://frappeframework.com"><img src="https://img.shields.io/badge/Frappe-v15-0089FF.svg" alt="Frappe v15"></a>
+  <a href="https://frappeframework.com"><img src="https://img.shields.io/badge/Frappe-v16-0089FF.svg" alt="Frappe v16"></a>
   <a href="https://github.com/BatchNepal/batch_projects/stargazers"><img src="https://img.shields.io/github/stars/BatchNepal/batch_projects?style=flat" alt="GitHub Stars"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
 </p>
@@ -40,13 +40,13 @@ Experience the freedom of managing your projects in a fast, modern, and collabor
 * **Timesheets & Costing:** Log time against tasks to generate timesheets and monitor project margins and utilization in real time.
 * **Automations and Workflows:** Trigger webhooks, push notifications, and custom workflows based on task events. Visual rule builder for automating task events, with webhook triggers and push notifications.
 * **Dashboards & Reportings:** Scheduled or realtime reports and customize dashboard widgets to track project progress, profitability, and utilization.
-* **Scalable and Performant by Design:** Gateway powered, horizontally scalable, and built with Golang to support lots of concurrent users without dropping a sweat.
+* **Scalable and Performant by Design:** Horizontally scalable on standard Frappe workers, with list queries pushed down to SQL so large task volumes stay responsive.
 * **Enterprise Integrations:** Seamlessly connect with other enterprise tools and services for a unified workflow.
 * **Interactive Views:** Switch seamlessly between Kanban Boards, Backlogs, Sprints, and Gantt charts with saved view states.
 * **Fast Frontend:** Built on Vue 3 and Pinia for near-instant rendering and snappy interaction.
 * **Real-Time & Collaboration:** WebSocket-based multi-user sync for live updates across all connected clients.
 * **Projects Templates:** Create and reuse project templates with pre-defined tasks, workflows, and custom fields for faster project setup. Leverage templates to standardize processes and ensure consistency across projects.
-* **Self-Hosted Gateway:** Deploy on your own infrastructure for full control over your data and security.
+* **Fully Self-Hosted:** Runs inside your own bench with no licence check and no data leaving your infrastructure. An optional Go side-car can take over durable automation timers and the realtime broadcast plane; unconfigured, the app degrades cleanly to Frappe's own scheduler.
 
 ### 💼 Native ERP Financial Engine
 
@@ -61,24 +61,20 @@ Experience the freedom of managing your projects in a fast, modern, and collabor
 
 ---
 
-## Open Core & Architecture
+## Licensing & Architecture
 
-We believe in full transparency regarding how BatchProjects is built and licensed. We use an **Open Core** model so the open-source community gets a fully functional ERP project system while supporting sustainable ongoing development.
+BatchProjects is a single, fully open edition. **Every feature is enabled on
+every install** — there are no paid tiers, no licence keys, no seat caps and no
+feature gates. Kanban boards, backlogs, sprints, Gantt, automations, webhooks,
+dashboards, intake forms, portfolio, goals, audit log and ERPNext billing
+write-back are all part of the AGPL-3.0 app.
 
-### What's included?
-
-| Feature | Open Core (`AGPL-3.0`) | BP Gateway (`bp-gateway`) |
-| :--- | :---: | :---: |
-| **Kanban Boards, Backlogs, Gantt & Sprints** | ✅ | ✅ |
-| **ERPNext Document Linking (SO, PO, Timesheets)** | ✅ | ✅ |
-| **Custom Fields & Project Workflows** | ✅ | ✅ |
-| **Profitability & Utilization Reporting** | ✅ | ✅ |
-| **Real-time Multi-user WebSocket Sync** | ❌ | ✅ |
-| **Visual Automation Rule Builder** | ❌ | ✅ |
-| **Workflow Webhooks & Push Notifications** | ❌ | ✅ |
-
-* **BatchProjects Core** is 100% free, AGPL-v3 licensed, and fully functional standalone.
-* **bp-gateway** is an optional proprietary companion service available as a self-hostable Docker container. Installing it unlocks real-time sync, automations, all premium features. You can host it yourself for full control over your data and security.
+Previous releases used an open-core model in which a proprietary `bp-gateway`
+companion service unlocked premium features and asserted a licence tier. As of
+**v2.0.0 that model is gone**: the tier ladder, seat enforcement and the
+gateway's licensing/identity layer have been removed from the app, and
+authorization is enforced entirely by BatchProjects' own project-scoped
+permission model inside Frappe.
 
 ---
 
@@ -96,14 +92,15 @@ We believe in full transparency regarding how BatchProjects is built and license
 
 ## Quick Start (Core App)
 
-BatchProjects runs as a standard Frappe app on **Frappe v15 / ERPNext v15**.
+BatchProjects runs as a standard Frappe app on **Frappe v16 / ERPNext v16**
+(Python 3.14+, Node 24+ for frontend development).
 
 ```bash
 # Navigate to your bench directory
 cd ~/frappe-bench
 
 # Get the app
-bench get-app https://github.com/BatchNepal/batch_projects --branch version-15
+bench get-app https://github.com/BatchNepal/batch_projects --branch version-16
 
 # Install on your site
 bench --site your-site.local install-app batch_projects
@@ -112,8 +109,8 @@ bench --site your-site.local install-app batch_projects
 bench --site your-site.local migrate
 ```
 
-That's the entire community version install — no Node, no build step, no external
-service. The `version-15` branch tracks ERPNext v15; see
+That's the entire install — no Node, no build step, no external service, and
+nothing to license. The `version-16` branch tracks ERPNext v16; see
 [`deploy/README.md`](deploy/README.md) for the full version-compatibility
 story and how branch naming maps to ERPNext versions going forward.
 
@@ -123,14 +120,26 @@ For local frontend development, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 [Frappe Framework](https://frappeframework.com) · [ERPNext](https://erpnext.com) · [Vue 3](https://vuejs.org) · [Pinia](https://pinia.vuejs.org) · Python
 
-## The optional but recommended add-on
+## Replacing ERPNext's stock Projects module
 
-Realtime updates, automation rules, ERP integration, and other
-premium features run through a small companion service (**bp-gateway**) that sits between frontend and backend of batch_projects app and handles heavy lifting required to handle premium features — it can run on same or dedicated server and provides you full control over your data and security.
+On ERPNext v16, installing BatchProjects makes it the **default Projects
+experience**:
 
-If you only need the community version, skip this gateway entirely — BatchProjects runs standalone on community plan.
+* The stock `Project` and `Task` desk list views redirect into the
+  BatchProjects SPA, so the BP project list is the default project list.
+* BatchProjects gets its own first-class v16 workspace sidebar.
+* ERPNext's own `Projects` sidebar is re-pointed at BatchProjects on install
+  and re-asserted after every `bench migrate`.
 
-See [`deploy/README.md`](deploy/README.md) for the install guide.
+ERPNext's native financial surfaces — Timesheet, Activity Type/Cost, Projects
+Settings and every Projects report — are deliberately left alone; costing and
+billing stay in ERPNext, which is the whole point of the integration.
+
+Need the raw ERPNext list for an import, a bulk edit or Report Builder? Append
+`?desk=1` (e.g. `/desk/project?desk=1`) and the stock view loads for the rest
+of the browser session.
+
+See [`deploy/README.md`](deploy/README.md) for the deployment guide.
 
 ## License
 
@@ -143,9 +152,13 @@ network service for others (e.g. offer it as SaaS), you must make your
 modified source available to those users. Just self-hosting it for your own
 company, unmodified or modified, carries no such obligation beyond attribution.
 
-The optional `bp-gateway` add-on is separate, proprietary addon,
-distributed as a signed container image under its own license — using it is
-optional and doesn't change the license of BatchProjects itself.
+Everything needed to run BatchProjects is in this repository under that one
+license, and nothing about the app is gated behind a licence any more.
+
+One optional integration point remains: the app can hand durable automation
+timers and realtime fan-out to an external side-car when `bp_bridge_url` is
+configured in `site_config.json`. It is entirely optional, gates no features,
+and the app runs fully standalone without it.
 
 ## Contributing
 

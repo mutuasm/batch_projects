@@ -20,11 +20,11 @@ import unittest
 import json
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import random_string
 
 
-class TestAutomationExecutionMetadata(FrappeTestCase):
+class TestAutomationExecutionMetadata(IntegrationTestCase):
     """Execution metadata persistence through the REAL runtime paths.
 
     The gateway dispatches matched rules by calling

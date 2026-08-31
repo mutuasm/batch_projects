@@ -2,10 +2,10 @@
 
 import frappe
 import json
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestWorkflowExecutionMetadata(FrappeTestCase):
+class TestWorkflowExecutionMetadata(IntegrationTestCase):
     def setUp(self):
         self.workflow = None
         self.run = None

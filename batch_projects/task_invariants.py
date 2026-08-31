@@ -145,31 +145,6 @@ def validate_task_assignees(doc, method=None):
     if old and old.project and old.project != doc.project:
         _prune_watchers_for_project_move(doc, new_users)
 
-        # Project moves are permission-graph mutations. Queue the sync only
-        # after the DB transaction commits; a failed save must never mutate
-        # OpenFGA ahead of MariaDB, which remains the durable authority.
-        old_project = old.project
-        new_project = doc.project
-        task = doc.name
-
-        def _sync_project_move():
-            try:
-                from batch_projects import bridge
-
-                bridge.publish_rebac_event({
-                    "event": "task.project_changed",
-                    "task": task,
-                    "old_project": old_project,
-                    "project": new_project,
-                    "timestamp": frappe.utils.now(),
-                })
-            except Exception:
-                frappe.log_error(
-                    frappe.get_traceback(), "bp rebac task project-change sync failed"
-                )
-
-        frappe.db.after_commit.add(_sync_project_move)
-
 
 def _validate_assignment_authority(doc, old, new_users, old_users) -> None:
     """Separate ordinary task editing from the authority to grant task access.

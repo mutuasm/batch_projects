@@ -14,7 +14,6 @@ from frappe.utils import flt, get_datetime, now_datetime, time_diff_in_hours
 from erpnext.projects.doctype.timesheet.timesheet import get_activity_cost
 
 from batch_projects.api.board import _check_task_permission, _require_system_user
-from batch_projects.entitlements import require_feature
 from batch_projects.setup.install import TIMER_ACTIVITY_TYPE
 
 
@@ -59,7 +58,6 @@ def start_timer(task):
     this task or another), it's stopped first — its elapsed time is still
     logged, exactly like an explicit stop_timer() call."""
     _require_system_user()
-    require_feature("time_tracking")
 
     task_doc = frappe.get_doc("BP Task", task)
     _check_task_permission(task, task_doc.project, "BP Member")
@@ -91,7 +89,6 @@ def start_timer(task):
 @frappe.whitelist()
 def stop_timer():
     _require_system_user()
-    require_feature("time_tracking")
 
     existing = frappe.db.get_value("BP Active Timer", {"user": frappe.session.user}, "name")
     if not existing:
@@ -339,7 +336,6 @@ def log_time(task, hours, date=None, description=None):
     the exact same rate/costing/invoicing path.
     """
     _require_system_user()
-    require_feature("time_tracking")
 
     hours = flt(hours)
     if hours <= 0:
@@ -422,7 +418,6 @@ def update_time_entry(time_log_name, hours=None, description=None):
     """Correct a logged time entry — was impossible from the app entirely
     (audit 03 §C1); only draft (unsubmitted) entries can be touched."""
     _require_system_user()
-    require_feature("time_tracking")
     ts, row = _get_editable_time_log(time_log_name)
 
     if hours is not None:
@@ -445,7 +440,6 @@ def delete_time_entry(time_log_name):
     """Remove a mistaken manual/timer entry — draft only, same guard as
     `update_time_entry`."""
     _require_system_user()
-    require_feature("time_tracking")
     ts, row = _get_editable_time_log(time_log_name)
     task_name = row.custom_bp_task
     ts.remove(row)

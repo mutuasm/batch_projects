@@ -1,56 +1,72 @@
 # Deploying BatchProjects
 
-Two independent components make up a BatchProjects deployment, depending
-on which features you need:
+BatchProjects is a single, fully open edition — every feature is enabled on
+every install. There is nothing to license and no paid tier, so a deployment
+is just a Frappe app install.
 
-1. **BatchProjects** — the Community-edition Frappe application and Vue
-   interface. Installed with a standard `bench get-app`, and works
-   anywhere Frappe does: self-hosted (Docker or bare bench) or on Frappe
-   Cloud. See the [root README](../README.md#quick-start). Starting from
-   nothing? [`docker-compose.selfhost.yml`](docker-compose.selfhost.yml)
-   provisions ERPNext and BatchProjects together.
-2. **The Gateway** (optional) — real-time collaboration, workflow
-   automation, and the other capabilities described in
-   [`gateway-setup.md`](gateway-setup.md). Every install activates
-   automatically on a free 60-day Business-plan trial (no card required),
-   reverting to the free tier afterward with nothing deleted or blocked
-   beyond normal free-tier gating — a paid plan is only needed to keep the
-   trial's features past day 60. Runs as its own compact Docker Compose
-   stack on infrastructure you control, independent of how ERPNext itself
-   is hosted.
-
-Organizations using the Community edition only need step 1 — the Gateway
-is entirely optional.
+1. **BatchProjects** — the Frappe application and Vue interface. Installed
+   with a standard `bench get-app`, and works anywhere Frappe does:
+   self-hosted (Docker or bare bench) or on Frappe Cloud. See the
+   [root README](../README.md#quick-start). Starting from nothing?
+   [`docker-compose.selfhost.yml`](docker-compose.selfhost.yml) provisions
+   ERPNext and BatchProjects together.
+2. **An optional automation side-car** — BatchProjects can hand durable
+   automation timers and realtime fan-out to a small external service. It is
+   entirely optional, gates no features, and the app runs fully standalone
+   without it. See [Optional side-car](#optional-side-car) below.
 
 ## Compatibility
 
-BatchProjects, the Gateway, and ERPNext core each version independently.
-Compatibility between them is managed as follows:
-
 | Relationship | Mechanism | How it's enforced |
 |---|---|---|
-| **BatchProjects ⨯ ERPNext/Frappe core** | A dedicated git branch per ERPNext release line — `version-15` targets ERPNext v15, with `version-16` following the same pattern once ERPNext v16 ships. | Selected at install time (`bench get-app --branch version-15`). |
-| **BatchProjects ⨯ Gateway** | Semantic version ranges. Each Gateway release declares the BatchProjects version range it supports; the installer detects the running BatchProjects version and automatically resolves the newest compatible Gateway release from a signed compatibility manifest. | Fully automatic, both at install time and on every subsequent Gateway restart. |
-| **Gateway ⨯ ERPNext/Frappe core** | The same branch convention as the first row, applied to the Gateway's own release channel. | Determined by which Gateway release channel is in use. |
+| **BatchProjects ⨯ ERPNext/Frappe core** | A dedicated git branch per ERPNext release line — `version-16` targets ERPNext v16 (Python 3.14+, Node 24+); `version-15` remains for the v15 line. | Selected at install time (`bench get-app --branch version-16`). |
 
-In practice, an organization selects the `version-NN` branch that matches
-its ERPNext installation; everything downstream — which Gateway release
-is installed and kept current — is resolved automatically. A Gateway
-release that is incompatible with the installed BatchProjects version
-will refuse to start rather than operate in an unsupported state.
+Select the `version-NN` branch matching your ERPNext installation. The app
+also declares its supported range in `pyproject.toml`
+(`frappe`/`erpnext` `>=16.0.0,<17.0.0`), which `bench` enforces on install.
 
 ## Deployment scenarios
 
-| Environment | BatchProjects | Gateway |
+| Environment | How |
+|---|---|
+| Self-hosted, Docker | `bench get-app` inside the bench container |
+| Self-hosted, bare bench | `bench get-app`, no containerization |
+| Frappe Cloud | Standard Frappe Cloud application install |
+
+## Replacing ERPNext's Projects module
+
+Installing BatchProjects on ERPNext v16 makes it the default Projects
+experience — the stock `Project` and `Task` desk lists redirect into the
+BatchProjects SPA, BatchProjects gets its own workspace sidebar, and
+ERPNext's `Projects` sidebar is re-pointed at it (re-asserted after every
+`bench migrate`, since that record is owned by erpnext and re-imported on
+each sync).
+
+ERPNext's own Timesheet, Activity Type/Cost, Projects Settings and Projects
+reports are deliberately left untouched — costing and billing stay in
+ERPNext.
+
+To reach the stock ERPNext list for an import, a bulk edit or Report
+Builder, append `?desk=1` (e.g. `/desk/project?desk=1`); the preference
+persists for the rest of the browser session.
+
+## Optional side-car
+
+These are the only `site_config.json` keys BatchProjects reads for the
+optional external service. All are unset by default, and every one of them
+fails closed — absent config means the feature simply runs in-process or not
+at all, never that a check is skipped.
+
+| Key | Read by | Effect when unset |
 |---|---|---|
-| Self-hosted, Docker | `bench get-app` inside the bench container | Co-located or on separate infrastructure — the installer detects the topology and confirms before writing configuration |
-| Self-hosted, bare bench | `bench get-app`, no containerization | Deployed via its own Docker Compose stack, whether co-located or separate |
-| Frappe Cloud | Standard Frappe Cloud application install | Always deployed on separate infrastructure, since Frappe Cloud does not host arbitrary services. Every configuration value the Gateway requires is available directly from the Frappe Cloud dashboard — no shell access is needed. |
+| `bp_bridge_url` | `bridge.py` | Durable timer registration and realtime fan-out no-op; automations still evaluate in-process. |
+| `bp_bridge_internal_url` | `bridge.py` | Falls back to `bp_bridge_url`. Only needed when the backend process and the browser reach the service at different addresses. |
+| `bp_scheduler_ingest_token` | `bridge.py` | Required alongside `bp_bridge_url`; without both, registration no-ops. |
+| `bp_gateway_shared_secret` | `api/credentials.py` | `get_credential_secret` refuses every request. This is an HMAC boundary protecting decrypted integration credentials — not a licence check. |
+| `bp_bridge_bootstrap_secret` | `api/session.py` | `mint_bridge_token` refuses to mint. |
+| `bp_automation_engine` | `entitlements.py` | Defaults to the in-process Python matcher, which is the only engine shipped. |
 
-## Domain requirements
-
-The Gateway installer provisions a working HTTPS endpoint automatically if
-no domain is supplied — a subdomain of `erpnext-nepal.com` named after the
-ERPNext site, one per instance, with DNS managed automatically on your
-behalf. A dedicated domain or subdomain is fully supported and recommended
-for any production deployment.
+`api/gateway.py` exposes a System-Manager-only `configure` endpoint that
+writes `bp_bridge_url`, `bp_scheduler_ingest_token`,
+`bp_gateway_shared_secret` and `bp_bridge_bootstrap_secret`, so a side-car
+installer can finish setup without shell access (notably on Frappe Cloud).

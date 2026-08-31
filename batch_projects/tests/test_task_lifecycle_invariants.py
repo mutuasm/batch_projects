@@ -9,14 +9,14 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks
 from batch_projects import task_lifecycle
 from batch_projects import task_validation
 
 
-class TestLifecycleRouting(FrappeTestCase):
+class TestLifecycleRouting(IntegrationTestCase):
     def test_soft_delete_methods_use_authoritative_lifecycle(self):
         overrides = hooks.override_whitelisted_methods
         self.assertEqual(
@@ -37,7 +37,7 @@ class TestLifecycleRouting(FrappeTestCase):
         )
 
 
-class TestTrashFlagInvariant(FrappeTestCase):
+class TestTrashFlagInvariant(IntegrationTestCase):
     def test_direct_soft_delete_flag_change_is_rejected(self):
         old = frappe._dict(is_deleted=0)
         doc = frappe._dict(is_deleted=1)
@@ -49,7 +49,7 @@ class TestTrashFlagInvariant(FrappeTestCase):
         task_validation.validate_trash_state(frappe._dict(is_deleted=0), old)
 
 
-class TestActiveTimerTrashInvariant(FrappeTestCase):
+class TestActiveTimerTrashInvariant(IntegrationTestCase):
     @patch("batch_projects.api.timers._append_time_log")
     @patch.object(task_lifecycle.frappe, "delete_doc")
     @patch.object(task_lifecycle.frappe, "get_all")
@@ -116,7 +116,7 @@ class TestActiveTimerTrashInvariant(FrappeTestCase):
         append_time_log.assert_called_once()
 
 
-class TestRestoreCascadeProvenance(FrappeTestCase):
+class TestRestoreCascadeProvenance(IntegrationTestCase):
     @patch.object(task_lifecycle, "_schedule_lifecycle")
     @patch.object(task_lifecycle, "_assignees", return_value=[])
     @patch.object(task_lifecycle.frappe.db, "set_value")

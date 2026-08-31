@@ -203,46 +203,6 @@ def publish_realtime_event(event: str, project: str, payload: dict) -> bool:
     return True
 
 
-def publish_rebac_event(payload: dict) -> bool:
-    """Publish a relationship-change edge (task assigned/unassigned, project
-    role changed) to the gateway's ReBAC Redis sync endpoint.
-
-    Deliberately a SEPARATE endpoint from publish_event()'s /v1/events —
-    that one feeds automation.Engine.Ingest, which license-gates on the
-    "automations" paid feature. Permission-sync correctness must never be
-    tied to a paid tier, so this rides its own path, same bridge/token.
-
-    Fire-and-forget on the mutation hot-path, same posture as publish_event:
-    a down or unconfigured bridge must never slow down or fail the caller's
-    save. The gateway is what enforces fail-closed on a stale/unreachable
-    cache — this call failing silently is not itself a security hole."""
-    url, token = _config()
-    if not (url and token):
-        frappe.logger("bp.bridge").debug("bridge not configured — skipping rebac sync")
-        return False
-
-    try:
-        resp = requests.post(
-            f"{url}/v1/rebac/sync",
-            data=json.dumps(payload),
-            headers={
-                "Content-Type": "application/json",
-                "X-BP-Service-Token": token,
-            },
-            timeout=_EVENT_TIMEOUT,
-        )
-    except requests.RequestException as e:
-        frappe.logger("bp.bridge").warning(f"rebac sync publish failed: {e}")
-        return False
-
-    if resp.status_code >= 300:
-        frappe.logger("bp.bridge").warning(
-            f"rebac sync publish {resp.status_code}: {resp.text[:200]}"
-        )
-        return False
-    return True
-
-
 def cancel_scheduled_job(job_id: str) -> bool:
     """Cancel a previously registered job. Best-effort; never raises."""
     if not job_id:

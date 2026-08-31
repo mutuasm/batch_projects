@@ -3,7 +3,7 @@
 # ProjectSummary. Run: bench --site <site> run-tests --app batch_projects
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects.api.board import (
     create_milestone,
@@ -27,12 +27,12 @@ from batch_projects.batch_projects.doctype.bp_project.test_bp_project import (
 # Frappe otherwise follows every optional Link recursively and can walk from
 # task provenance fields into unrelated ERPNext/payment fixtures. Milestones
 # are created explicitly below; the ERP links are not fixtures for this module.
-test_ignore = ["BP Milestone", "Employee", "Sales Order", "Timesheet Detail"]
+IGNORE_TEST_RECORD_DEPENDENCIES = ["BP Milestone", "Employee", "Sales Order", "Timesheet Detail"]
 
 TEST_KEY = "TBTSK"
 
 
-class TestBPTask(FrappeTestCase):
+class TestBPTask(IntegrationTestCase):
     def setUp(self):
         frappe.set_user("Administrator")
         delete_project_fixture(TEST_KEY)

@@ -3,14 +3,14 @@
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks
 from batch_projects import notification_permissions as perms
 from batch_projects import notification_reads as reads
 
 
-class TestNotificationReadRoutes(FrappeTestCase):
+class TestNotificationReadRoutes(IntegrationTestCase):
     def test_every_notification_center_read_route_is_overridden(self):
         expected = {
             "batch_projects.api.board.get_notifications":
@@ -38,7 +38,7 @@ class TestNotificationReadRoutes(FrappeTestCase):
         )
 
 
-class TestNotificationVisibility(FrappeTestCase):
+class TestNotificationVisibility(IntegrationTestCase):
     @patch("batch_projects.notification_delivery.can_receive_task_delivery")
     def test_revoked_task_notification_is_removed_retroactively(self, can_receive):
         can_receive.return_value = False
@@ -86,7 +86,7 @@ class TestNotificationVisibility(FrappeTestCase):
         is_visible.assert_called_once()
 
 
-class TestNotificationPagination(FrappeTestCase):
+class TestNotificationPagination(IntegrationTestCase):
     @patch.object(reads, "_require_system_user")
     @patch.object(reads, "_visible_unread_count", return_value=1)
     @patch.object(reads, "_visible_rows")
@@ -128,7 +128,7 @@ class TestNotificationPagination(FrappeTestCase):
             frappe.set_user("Administrator")
 
 
-class TestNotificationMutationBoundary(FrappeTestCase):
+class TestNotificationMutationBoundary(IntegrationTestCase):
     @patch.object(reads, "_require_system_user")
     @patch.object(reads, "_is_visible", return_value=False)
     @patch.object(reads.frappe.db, "get_value")
@@ -143,7 +143,7 @@ class TestNotificationMutationBoundary(FrappeTestCase):
             reads._visible_notification("N-SECRET", "old@example.com")
 
 
-class TestGenericNotificationPermissions(FrappeTestCase):
+class TestGenericNotificationPermissions(IntegrationTestCase):
     @patch.object(perms, "_is_admin", return_value=False)
     @patch.object(perms, "_scope", return_value=({"VISIBLE"}, {"TASK-DIRECT"}))
     def test_list_query_requires_recipient_and_live_authority(self, scope, is_admin):

@@ -16,7 +16,6 @@ from frappe import _
 
 from batch_projects.api.board import _check_permission
 from batch_projects.api.sharing import _throttle_guest_comment
-from batch_projects.entitlements import require_feature
 
 
 # ─── Management endpoints (authenticated) ─────────────────────────────────────
@@ -25,7 +24,6 @@ from batch_projects.entitlements import require_feature
 def list_intake_forms(project):
     """List active intake forms for a project."""
     _check_permission(project, "BP Viewer")
-    require_feature("intake_forms")
     return frappe.get_all("BP Intake Form",
         filters={"project": project},
         fields=["name", "form_title", "is_active", "task_type", "default_status"],
@@ -37,7 +35,6 @@ def get_intake_form_detail(form):
     """Get full form definition with fields."""
     doc = frappe.get_doc("BP Intake Form", form)
     _check_permission(doc.project, "BP Viewer")
-    require_feature("intake_forms")
     fields = _parse_fields(doc.fields_json)
     return {
         "name": doc.name,
@@ -55,7 +52,6 @@ def create_intake_form(project, form_title, fields_json=None,
                         task_type=None, default_status=None):
     """Create a new intake form."""
     _check_permission(project, "BP Manager")
-    require_feature("intake_forms")
     doc = frappe.get_doc({
         "doctype": "BP Intake Form",
         "project": project,
@@ -84,7 +80,6 @@ def update_intake_form(form, fields):
         fields = json.loads(fields)
     doc = frappe.get_doc("BP Intake Form", form)
     _check_permission(doc.project, "BP Manager")
-    require_feature("intake_forms")
     _ALLOWED_FIELDS = {"form_title", "fields_json", "task_type", "default_status", "is_active"}
     if fields.get("project") and fields["project"] != doc.project:
         frappe.throw("Intake forms can't be moved between projects.", frappe.PermissionError)
@@ -101,7 +96,6 @@ def delete_intake_form(form):
     """Delete an intake form."""
     doc = frappe.get_doc("BP Intake Form", form)
     _check_permission(doc.project, "BP Admin")
-    require_feature("intake_forms")
     frappe.delete_doc("BP Intake Form", form, ignore_permissions=True)
     frappe.db.commit()
     return {"ok": True}

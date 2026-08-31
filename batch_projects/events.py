@@ -86,7 +86,7 @@ DRAWING_PRESENCE  = "drawing.presence"
 #   "employee": str
 #   "full_name": str
 #
-# project.role_changed (ReBAC sync, see _sync_rebac below):
+# project.role_changed:
 #   "user":      str — the member whose role changed
 #   "old_role":  str | None — None means "just added"
 #   "new_role":  str | None — None means "removed from the project"
@@ -147,18 +147,12 @@ def emit(event_name: str, payload: dict):
         frappe.db.after_commit.add(
             lambda: _queue_notifications(event_name, payload)
         )
-        frappe.db.after_commit.add(
-            lambda: _sync_rebac(event_name, payload)
-        )
     else:
         # 3. Automation rules
         _evaluate_automations(event_name, payload)
 
         # 4. Notifications
         _queue_notifications(event_name, payload)
-
-        # 5. ReBAC relationship sync — always, independent of bp_automation_engine
-        _sync_rebac(event_name, payload)
 
 
 # ─── ENRICHMENT ──────────────────────────────────────────────────────────────
@@ -402,71 +396,6 @@ def _safe_json(raw, default):
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return default
-
-
-# ─── REBAC RELATIONSHIP SYNC ─────────────────────────────────────────────────
-#
-# The gateway runs a Zanzibar-lite ReBAC engine (OpenFGA) as the authorization
-# authority; Frappe/MariaDB remains the durable source of truth OpenFGA's
-# relation tuples are a materialized index of. This is the write-side half —
-# every edge-changing event also gets a small, purpose-built envelope
-# published to the gateway, independent of bp_automation_engine (that flag
-# only selects which engine EXECUTES automation RULES; ReBAC sync is a
-# separate, always-on concern) and via a separate endpoint from the
-# automation ingest (see bridge.publish_rebac_event — the automation ingest
-# license-gates on the "automations" paid feature, which permission-sync
-# correctness must never depend on).
-#
-# TASK_CREATED / PROJECT_CREATED carry the STRUCTURAL edges (task's
-# parent_project link, project's org link) — without them a role or
-# assignee tuple has nothing to inherit through; the other three carry the
-# actual grants.
-
-_REBAC_SYNC_EVENTS = {
-    TASK_ASSIGNED, TASK_UNASSIGNED, PROJECT_ROLE_CHANGED,
-    TASK_CREATED, PROJECT_CREATED,
-}
-
-
-def _rebac_envelope(event_name: str, payload: dict) -> dict:
-    """Minimal envelope for a relationship-sync edge — deliberately NOT
-    _event_envelope() above (that one is automation-specific: condition
-    snapshot, recursion-depth guard, generic payload passthrough for rule
-    matching). A ReBAC edge only ever carries the identity of what changed."""
-    envelope = {
-        "event": event_name,
-        "project": payload.get("project"),
-        "timestamp": payload.get("timestamp"),
-    }
-    if event_name in (TASK_ASSIGNED, TASK_UNASSIGNED):
-        envelope["task"] = payload.get("task")
-        envelope["user"] = payload.get("assignee")
-    elif event_name == PROJECT_ROLE_CHANGED:
-        envelope["user"] = payload.get("user")
-        envelope["old_role"] = payload.get("old_role")
-        envelope["new_role"] = payload.get("new_role")
-    elif event_name == TASK_CREATED:
-        envelope["task"] = payload.get("task")
-    # PROJECT_CREATED needs nothing beyond the base "project" field already
-    # set above — the gateway links every project to the single org:main.
-    return envelope
-
-
-def _sync_rebac(event_name: str, payload: dict):
-    """Publish a relationship-change edge to the gateway, if this event is
-    one of the ones that actually changes a permission edge. Isolated like
-    every other emit() step — a failure here never breaks the caller's
-    save. Fail-CLOSED is the gateway's job (a stale/unreachable cache must
-    deny, not silently allow) — this function failing quietly is a
-    sync-lag risk to monitor, not itself a security hole, since the
-    gateway is the one deciding what "cache miss" means."""
-    if event_name not in _REBAC_SYNC_EVENTS:
-        return
-    try:
-        from batch_projects import bridge
-        bridge.publish_rebac_event(_rebac_envelope(event_name, payload))
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "bp rebac sync failed")
 
 
 # ─── NOTIFICATIONS ───────────────────────────────────────────────────────────

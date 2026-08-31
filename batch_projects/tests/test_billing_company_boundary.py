@@ -86,6 +86,41 @@ class _FakeSalesInvoice:
         return self
 
 
+# Tables that would only be touched if billing work had actually begun.
+_BILLING_TABLES = (
+    "tabSales Invoice",
+    "tabTimesheet",
+    "tabBP Milestone",
+    "tabBP Task",
+    "tabBP Project",
+    "tabProject",
+    "tabExpense Claim",
+)
+
+
+def _billing_queries(sql_mock):
+    """The queries from a patched frappe.db.sql that represent real billing work.
+
+    A blanket `sql.assert_not_called()` cannot express "bailed out before doing
+    any billing": frappe.throw() itself calls _() to translate the message
+    dialog's default title (see frappe/utils/messages.py msgprint —
+    `out.title = title or _("Message", ...)`), and the first throw in a process
+    lazily initializes the translation subsystem, which issues a `tabDocType`
+    lookup for `Translation`. That is framework bookkeeping, and *which* test
+    pays for it depends entirely on suite execution order — so asserting no SQL
+    at all makes these tests fail or pass based on unrelated changes elsewhere.
+    Assert on the thing under test instead: that no billing table was read or
+    written before the company guard fired.
+    """
+    return [
+        call.args[0]
+        for call in sql_mock.call_args_list
+        if call.args
+        and isinstance(call.args[0], str)
+        and any(table in call.args[0] for table in _BILLING_TABLES)
+    ]
+
+
 class TestBillingCompanyBoundary(unittest.TestCase):
     def test_missing_explicit_and_default_company_fails_closed(self):
         p = project(
@@ -150,10 +185,6 @@ class TestBillingCompanyBoundary(unittest.TestCase):
                 "batch_projects.access.require_capability",
             ),
             patch.object(
-                erp_link,
-                "require_feature",
-            ),
-            patch.object(
                 erp_link.frappe.defaults,
                 "get_global_default",
                 return_value=None,
@@ -180,7 +211,7 @@ class TestBillingCompanyBoundary(unittest.TestCase):
                     "BP-NO-COMPANY"
                 )
 
-        sql.assert_not_called()
+        self.assertEqual(_billing_queries(sql), [])
         new_doc.assert_not_called()
 
     def test_generate_invoice_uses_effective_company_in_both_orders(self):
@@ -249,10 +280,6 @@ class TestBillingCompanyBoundary(unittest.TestCase):
                     ),
                     patch(
                         "batch_projects.access.require_capability",
-                    ),
-                    patch.object(
-                        erp_link,
-                        "require_feature",
                     ),
                     patch.object(
                         erp_link.frappe.defaults,
@@ -364,10 +391,6 @@ class TestBillingCompanyBoundary(unittest.TestCase):
                 "batch_projects.access.require_capability",
             ),
             patch.object(
-                erp_link,
-                "require_feature",
-            ),
-            patch.object(
                 erp_link.frappe,
                 "get_doc",
                 side_effect=lambda doctype, name: projects[name],
@@ -389,7 +412,7 @@ class TestBillingCompanyBoundary(unittest.TestCase):
                     ["BP-A", "BP-B"]
                 )
 
-        sql.assert_not_called()
+        self.assertEqual(_billing_queries(sql), [])
         new_doc.assert_not_called()
 
     def test_candidates_split_same_client_across_effective_companies(self):
@@ -432,10 +455,6 @@ class TestBillingCompanyBoundary(unittest.TestCase):
             return "USD", "USD", 1.0
 
         with (
-            patch.object(
-                erp_link,
-                "require_feature",
-            ),
             patch.object(
                 erp_link,
                 "_require_system_user",
@@ -533,10 +552,6 @@ class TestBillingCompanyBoundary(unittest.TestCase):
         ]
 
         with (
-            patch.object(
-                erp_link,
-                "require_feature",
-            ),
             patch.object(
                 erp_link,
                 "_require_system_user",

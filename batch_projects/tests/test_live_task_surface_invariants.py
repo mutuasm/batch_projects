@@ -4,14 +4,14 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks
 from batch_projects import task_aggregates
 from batch_projects import task_surfaces
 
 
-class TestLiveTaskRoutes(FrappeTestCase):
+class TestLiveTaskRoutes(IntegrationTestCase):
     def test_legacy_task_surfaces_are_overridden(self):
         # automation_surface.py and dashboard_task_reads.py wiring belong to
         # separate PRs (automation follow-up on PR #60, dashboard security) —
@@ -33,7 +33,7 @@ class TestLiveTaskRoutes(FrappeTestCase):
             self.assertEqual(overrides.get(source), target)
 
 
-class TestAggregateFilters(FrappeTestCase):
+class TestAggregateFilters(IntegrationTestCase):
     @patch("batch_projects.access.has_capability", return_value=True)
     @patch.object(task_aggregates.frappe, "get_all", return_value=[])
     @patch.object(task_aggregates.frappe, "get_doc")
@@ -138,7 +138,7 @@ class TestAggregateFilters(FrappeTestCase):
         self.assertEqual(task_query.kwargs["filters"]["is_deleted"], 0)
 
 
-class TestSprintAndFilesFilters(FrappeTestCase):
+class TestSprintAndFilesFilters(IntegrationTestCase):
     @patch("batch_projects.api.board._invalidate_sprint_cache")
     @patch("batch_projects.api.board._get_completed_statuses_by_project", return_value=["Done"])
     @patch("batch_projects.api.board._check_permission")

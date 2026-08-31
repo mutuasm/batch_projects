@@ -17,10 +17,10 @@ Run with:
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestTaskWatcherInvariant(FrappeTestCase):
+class TestTaskWatcherInvariant(IntegrationTestCase):
     def test_watcher_cannot_create_task_access(self):
         watcher = frappe.get_doc({
             "doctype": "BP Task Watcher",
@@ -83,7 +83,7 @@ class TestTaskWatcherInvariant(FrappeTestCase):
             watcher.validate()
 
 
-class TestNotificationRuleRecipientInvariant(FrappeTestCase):
+class TestNotificationRuleRecipientInvariant(IntegrationTestCase):
     def test_project_rule_rejects_static_user_without_access(self):
         rule = frappe.get_doc({
             "doctype": "BP Notification Rule",

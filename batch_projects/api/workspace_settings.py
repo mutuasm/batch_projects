@@ -14,12 +14,9 @@ import frappe
 import json
 
 from batch_projects import access
-from batch_projects.entitlements import get_workspace_features, require_feature
+from batch_projects.entitlements import get_workspace_features
 
 
-def _guard():
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
 
 def _require_system_user():
@@ -46,7 +43,6 @@ def get_workspace_settings():
     """Every logged-in member gets the effective feature flags (what the SPA
     needs to hide gated tabs/routes). Workspace admins additionally get the
     full record, for the settings hub."""
-    _guard()
     _require_system_user()
 
     features = get_workspace_features()
@@ -87,7 +83,6 @@ def update_workspace_settings(approval_mode=None, approvers=None,
                                features_json=None, role_overrides_json=None,
                                brand_name=None, logo_url=None, favicon_url=None):
     """Admin-only write."""
-    _guard()
     _require_system_user()
     if not access.is_workspace_admin():
         frappe.throw(
@@ -97,7 +92,6 @@ def update_workspace_settings(approval_mode=None, approvers=None,
     doc = frappe.get_single("BP Workspace Settings")
 
     if brand_name is not None or logo_url is not None or favicon_url is not None:
-        require_feature("custom_branding")
         if brand_name is not None:
             doc.brand_name = brand_name
         if logo_url is not None:

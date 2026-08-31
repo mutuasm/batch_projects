@@ -9,13 +9,13 @@ task_field_security.py / task_reads.py coverage relevant here.
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import task_field_security
 from batch_projects import task_reads
 
 
-class TestTaskOnlyFieldAuthority(FrappeTestCase):
+class TestTaskOnlyFieldAuthority(IntegrationTestCase):
     @staticmethod
     def _doc(**values):
         return frappe._dict(values)
@@ -58,7 +58,7 @@ class TestTaskOnlyFieldAuthority(FrappeTestCase):
         )
 
 
-class TestTaskReadMinimization(FrappeTestCase):
+class TestTaskReadMinimization(IntegrationTestCase):
     @patch("batch_projects.api.custom_fields._attached_fields")
     def test_custom_field_output_is_allowlist_not_denylist(self, attached):
         # task_reads imports access locally inside the function, not at module

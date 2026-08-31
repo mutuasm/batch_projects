@@ -69,10 +69,6 @@ def _public_dict(link, with_url=True) -> dict:
 def create_share_link(project, scope="board", task=None, expires_in_days=None, label=None, access_level="view"):
     """Create a public link. Manager+ and Team tier or above.
     access_level: "view" (default), "comment" (task only), or "edit" (task only)."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
-    from batch_projects.entitlements import require_feature
-    require_feature("share_links")
 
     project = _resolve_project(project)
     access.require(project, "Manager")
@@ -119,8 +115,6 @@ def create_share_link(project, scope="board", task=None, expires_in_days=None, l
 @frappe.whitelist()
 def list_share_links(project, scope=None):
     """Live (non-revoked) share links for a project. Manager+."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     project = _resolve_project(project)
     access.require(project, "Manager")
 
@@ -149,8 +143,6 @@ def list_share_links(project, scope=None):
 @frappe.whitelist()
 def revoke_share_link(name):
     """Revoke a link permanently. Manager+."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     link = frappe.get_doc("BP Share Link", name)
     access.require(link.project, "Manager")
     link.revoked = 1

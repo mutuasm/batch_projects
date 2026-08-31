@@ -118,10 +118,6 @@ class TestBillingMixedCurrency(unittest.TestCase):
                 "batch_projects.access.require_capability",
             ),
             patch.object(
-                erp_link,
-                "require_feature",
-            ),
-            patch.object(
                 erp_link.frappe,
                 "get_doc",
                 side_effect=lambda doctype, name: projects[name],
@@ -156,10 +152,6 @@ class TestBillingMixedCurrency(unittest.TestCase):
             ),
             patch(
                 "batch_projects.access.require_capability",
-            ),
-            patch.object(
-                erp_link,
-                "require_feature",
             ),
             patch.object(
                 erp_link.frappe,
@@ -253,10 +245,6 @@ class TestBillingMixedCurrency(unittest.TestCase):
                     ),
                     patch(
                         "batch_projects.access.require_capability",
-                    ),
-                    patch.object(
-                        erp_link,
-                        "require_feature",
                     ),
                     patch.object(
                         erp_link.frappe,
@@ -383,10 +371,6 @@ class TestBillingMixedCurrency(unittest.TestCase):
                     ),
                     patch(
                         "batch_projects.access.require_capability",
-                    ),
-                    patch.object(
-                        erp_link,
-                        "require_feature",
                     ),
                     patch.object(
                         erp_link.frappe,
@@ -584,10 +568,6 @@ class TestBillingMixedCurrency(unittest.TestCase):
             )
 
         with (
-            patch.object(
-                erp_link,
-                "require_feature",
-            ),
             patch.object(
                 erp_link,
                 "_require_system_user",

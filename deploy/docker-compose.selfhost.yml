@@ -3,7 +3,7 @@
 # Follows frappe_docker's own service shape so it's familiar to anyone who's
 # self-hosted ERPNext before: one-shot init containers (configurator,
 # create-site) provision the site, then the long-running services (backend,
-# frontend, websocket, queues, scheduler) come up. The `frappe/erpnext:v15`
+# frontend, websocket, queues, scheduler) come up. The `frappe/erpnext:v16`
 # image already has ERPNext installed; create-site adds batch_projects on
 # top via a normal `bench get-app` against this repo.
 #
@@ -14,13 +14,13 @@
 #   # first boot takes a few minutes (site creation + app install) — watch:
 #   docker compose -f docker-compose.selfhost.yml logs -f create-site
 #
-# This stands up the free tier only. For the optional premium gateway
-# add-on, see gateway-setup.md — separate, optional, install after this.
+# This stands up the complete app. There is no paid tier and nothing further
+# to install — every BatchProjects feature is enabled by this compose alone.
 
 name: batch_projects
 
 x-erpnext-image: &erpnext-image
-  image: frappe/erpnext:${ERPNEXT_VERSION:-v15.44.0}
+  image: frappe/erpnext:${ERPNEXT_VERSION:-v16.17.0}
 
 services:
   mariadb:
@@ -108,7 +108,7 @@ services:
             --admin-password "${ADMIN_PASSWORD:?set in .env}"
             --no-mariadb-socket
             --install-app erpnext;
-          bench get-app batch_projects https://github.com/BatchNepal/batch_projects --branch version-15;
+          bench get-app batch_projects https://github.com/BatchNepal/batch_projects --branch version-16;
           bench --site "${SITE_NAME:-erp.localhost}" install-app batch_projects;
         else
           echo "Site already exists, skipping creation.";

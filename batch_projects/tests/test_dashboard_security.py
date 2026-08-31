@@ -8,12 +8,12 @@
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import dashboard_security, dashboard_task_reads, hooks
 
 
-class TestDashboardSecurityWiring(FrappeTestCase):
+class TestDashboardSecurityWiring(IntegrationTestCase):
     def test_all_seven_routes_are_overridden(self):
         overrides = hooks.override_whitelisted_methods
         expected = {
@@ -38,7 +38,7 @@ class TestDashboardSecurityWiring(FrappeTestCase):
             self.assertEqual(overrides.get(source), target)
 
 
-class TestAssertFilterFields(FrappeTestCase):
+class TestAssertFilterFields(IntegrationTestCase):
     def test_unpermitted_filter_field_rejected(self):
         with patch.object(
             dashboard_security, "_field_rows",
@@ -66,7 +66,7 @@ class TestAssertFilterFields(FrappeTestCase):
             )
 
 
-class TestWidgetSourceFields(FrappeTestCase):
+class TestWidgetSourceFields(IntegrationTestCase):
     @patch.object(dashboard_security, "_guard")
     @patch.object(dashboard_security, "_entry", return_value={})
     def test_bp_task_strips_internal_and_money_fields(self, entry, guard):
@@ -86,7 +86,7 @@ class TestWidgetSourceFields(FrappeTestCase):
         self.assertEqual(names, {"title"})
 
 
-class TestWidgetSourceFieldOptions(FrappeTestCase):
+class TestWidgetSourceFieldOptions(IntegrationTestCase):
     @patch.object(dashboard_security, "_guard")
     @patch.object(dashboard_security, "_entry", return_value={})
     def test_non_select_or_link_field_rejected(self, entry, guard):
@@ -115,7 +115,7 @@ class TestWidgetSourceFieldOptions(FrappeTestCase):
         self.assertEqual(result, [])
 
 
-class TestDoctypeGroupData(FrappeTestCase):
+class TestDoctypeGroupData(IntegrationTestCase):
     @patch.object(dashboard_security, "_guard")
     def test_bp_task_must_use_dedicated_endpoint(self, guard):
         with self.assertRaises(frappe.ValidationError):
@@ -132,7 +132,7 @@ class TestDoctypeGroupData(FrappeTestCase):
                 dashboard_security.get_doctype_group_data("Sales Invoice", "grand_total")
 
 
-class TestUpdateWidgetSourceField(FrappeTestCase):
+class TestUpdateWidgetSourceField(IntegrationTestCase):
     @patch.object(dashboard_security, "_guard")
     def test_bp_task_rejected(self, guard):
         with self.assertRaises(frappe.ValidationError):
@@ -175,7 +175,7 @@ class TestUpdateWidgetSourceField(FrappeTestCase):
                 )
 
 
-class TestWidgetSourceDocQuickview(FrappeTestCase):
+class TestWidgetSourceDocQuickview(IntegrationTestCase):
     @patch.object(dashboard_security, "_guard")
     @patch.object(dashboard_security, "_entry", return_value={})
     def test_no_read_permission_raises_does_not_exist_not_permission_denied(self, entry, guard):
@@ -186,7 +186,7 @@ class TestWidgetSourceDocQuickview(FrappeTestCase):
                 dashboard_security.get_widget_source_doc_quickview("Sales Invoice", "SINV-1")
 
 
-class TestMultiSourceCount(FrappeTestCase):
+class TestMultiSourceCount(IntegrationTestCase):
     @patch.object(dashboard_security, "_guard")
     @patch.object(dashboard_security, "_entry", return_value={"label": "Tasks"})
     @patch.object(dashboard_security, "_filters", return_value=[])
@@ -207,7 +207,7 @@ class TestMultiSourceCount(FrappeTestCase):
         self.assertIn(["is_deleted", "=", 0], called_filters)
 
 
-class TestFieldAllowed(FrappeTestCase):
+class TestFieldAllowed(IntegrationTestCase):
     def test_internal_field_always_denied(self):
         self.assertFalse(dashboard_task_reads._field_allowed("bridge_job_id", ["PROJ-1"]))
 
@@ -230,7 +230,7 @@ class TestFieldAllowed(FrappeTestCase):
         self.assertTrue(dashboard_task_reads._field_allowed("title", ["PROJ-1"]))
 
 
-class TestAssertDashboardTaskFields(FrappeTestCase):
+class TestAssertDashboardTaskFields(IntegrationTestCase):
     def test_denied_field_in_filters_rejected(self):
         with patch.object(dashboard_task_reads, "_scope_projects", return_value=["PROJ-1"]):
             with self.assertRaises(frappe.PermissionError):
@@ -250,7 +250,7 @@ class TestAssertDashboardTaskFields(FrappeTestCase):
             )
 
 
-class TestColumnWidgetDataVisibilityFilter(FrappeTestCase):
+class TestColumnWidgetDataVisibilityFilter(IntegrationTestCase):
     def test_invisible_task_is_dropped_from_result(self):
         base_result = {
             "buckets": [{"key": "today", "tasks": [
@@ -283,7 +283,7 @@ class TestColumnWidgetDataVisibilityFilter(FrappeTestCase):
         self.assertEqual(result["total"], 1)
 
 
-class TestMultiSourceCountDelegation(FrappeTestCase):
+class TestMultiSourceCountDelegation(IntegrationTestCase):
     def test_delegates_to_authoritative_dashboard_security_version(self):
         with patch(
             "batch_projects.dashboard_security.get_multi_source_count",

@@ -7,7 +7,7 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import access, automation_security, events, hooks
 from batch_projects.api.board import create_project
@@ -96,7 +96,7 @@ def _remove_member(project, user):
     frappe.local._bp_effective_role = {}
 
 
-class TestAutomationSecurityWiring(FrappeTestCase):
+class TestAutomationSecurityWiring(IntegrationTestCase):
     """Prove the hook registrations exist AND point at real, callable functions —
     the original bug was these entries being entirely absent, so this is a
     real regression guard, not just documentation."""
@@ -125,7 +125,7 @@ class TestAutomationSecurityWiring(FrappeTestCase):
         frappe.is_whitelisted(automation_security.run_scheduled_event)
 
 
-class TestRuleAuthority(FrappeTestCase):
+class TestRuleAuthority(IntegrationTestCase):
     """Direct unit coverage of validate_rule_authority's real branches."""
 
     def test_instance_admin_bypasses_everything(self):
@@ -226,7 +226,7 @@ class TestRuleAuthority(FrappeTestCase):
                 )
 
 
-class TestDispatchScope(FrappeTestCase):
+class TestDispatchScope(IntegrationTestCase):
     """validate_dispatch is the runtime (not just save-time) boundary — legacy
     rows and direct DB tampering must still be caught here."""
 
@@ -263,7 +263,7 @@ class TestDispatchScope(FrappeTestCase):
             automation_security.validate_dispatch(rule_doc, {"project": "RULE-PROJECT"})
 
 
-class TestWhitelistedWrappers(FrappeTestCase):
+class TestWhitelistedWrappers(IntegrationTestCase):
     """Prove apply_action/run_scheduled_event actually call validate_dispatch
     before delegating — not just that hooks.py names them correctly."""
 
@@ -323,7 +323,7 @@ class TestWhitelistedWrappers(FrappeTestCase):
         self.assertEqual(result["status"], "ok")
 
 
-class TestAutomationRuleSaveIntegration(FrappeTestCase):
+class TestAutomationRuleSaveIntegration(IntegrationTestCase):
     """End-to-end: the doc_events hook must actually fire on a real save, not
     just exist as a function that works when called directly."""
 
@@ -373,7 +373,7 @@ class TestAutomationRuleSaveIntegration(FrappeTestCase):
         self.assertTrue(doc.name)
 
 
-class TestNotificationDeliveryRevalidation(FrappeTestCase):
+class TestNotificationDeliveryRevalidation(IntegrationTestCase):
     """Regression coverage for the revoked-access delivery gap: a static
     Notify recipient's project visibility was checked only once, at rule-save
     time (automation_security._validate_action_authority). A member removed
@@ -469,7 +469,7 @@ class TestNotificationDeliveryRevalidation(FrappeTestCase):
         send_email.assert_not_called()
 
 
-class TestSendEmailWorkspaceAdminExternalRecipients(FrappeTestCase):
+class TestSendEmailWorkspaceAdminExternalRecipients(IntegrationTestCase):
     """The 'Send Email' action (workspace-scope automations may target
     external, non-System-User addresses — automation_security.py's own
     docstring: "Use a workspace-admin automation for external recipients")

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks
 from batch_projects import task_invariants as inv
@@ -57,7 +57,7 @@ class _FakeTask:
         return self._old is None
 
 
-class TestTaskAssignmentInvariantHooks(FrappeTestCase):
+class TestTaskAssignmentInvariantHooks(IntegrationTestCase):
     def test_hooks_cover_all_document_write_paths(self):
         task_hooks = hooks.doc_events["BP Task"]
         self.assertEqual(
@@ -123,7 +123,7 @@ class TestTaskAssignmentInvariantHooks(FrappeTestCase):
         self.assertTrue(payload["initial_assignment"])
 
 
-class TestTaskTypeInvariant(FrappeTestCase):
+class TestTaskTypeInvariant(IntegrationTestCase):
     @patch.object(inv.frappe, "get_cached_doc")
     def test_changed_invalid_task_type_fails_closed(self, get_project):
         project = MagicMock()
@@ -141,7 +141,7 @@ class TestTaskTypeInvariant(FrappeTestCase):
         get_project.assert_not_called()
 
 
-class TestApprovalInvariant(FrappeTestCase):
+class TestApprovalInvariant(IntegrationTestCase):
     @patch.object(inv, "_user_can_view_task", return_value=False)
     @patch.object(inv, "_assert_assignable_user")
     def test_new_pending_approver_must_be_able_to_view_task(self, assignable, can_view):
@@ -166,7 +166,7 @@ class TestApprovalInvariant(FrappeTestCase):
         can_view.assert_called_once()
 
 
-class TestTaskRelationshipInvariants(FrappeTestCase):
+class TestTaskRelationshipInvariants(IntegrationTestCase):
     @patch.object(inv.frappe.db, "get_value")
     def test_cross_project_epic_is_rejected(self, get_value):
         get_value.return_value = "BP-PROJ-2"
@@ -215,7 +215,7 @@ class TestTaskRelationshipInvariants(FrappeTestCase):
         inv._validate_project_relations(_FakeTask(sprint="SPRINT-TEAM"))
 
 
-class TestWatcherProjectMove(FrappeTestCase):
+class TestWatcherProjectMove(IntegrationTestCase):
     @patch.object(inv, "_user_can_view_task")
     @patch.object(inv.frappe.db, "delete")
     @patch.object(inv.frappe.db, "set_value")
@@ -233,7 +233,7 @@ class TestWatcherProjectMove(FrappeTestCase):
         delete.assert_called_once_with("BP Task Watcher", {"name": "W-DROP"})
 
 
-class TestMentionAuthorization(FrappeTestCase):
+class TestMentionAuthorization(IntegrationTestCase):
     @patch.object(inv, "_user_can_view_task", return_value=False)
     def test_new_mention_without_access_is_rejected(self, can_view):
         with self.assertRaises(frappe.PermissionError):

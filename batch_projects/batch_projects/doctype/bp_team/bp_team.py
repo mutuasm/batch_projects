@@ -31,20 +31,6 @@ class BPTeam(Document):
 				seen_users.add(m.user)
 				_assert_assignable_user(m.user)
 
-			from batch_projects.entitlements import assert_seats_available, is_seated
-			if not self.is_new():
-				old_users = {
-					r.user
-					for r in frappe.get_all(
-						"BP Team Member", filters={"parent": self.name}, fields=["user"]
-					)
-				}
-				new_users = [u for u in seen_users - old_users if not is_seated(u)]
-			else:
-				new_users = [u for u in seen_users if not is_seated(u)]
-			if new_users:
-				assert_seats_available(len(new_users))
-
 	def _generate_key(self, name):
 		import re
 		words = re.sub(r"[^a-zA-Z0-9\s]", "", name).split()

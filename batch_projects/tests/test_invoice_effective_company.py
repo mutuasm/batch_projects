@@ -94,7 +94,6 @@ class TestInvoiceEffectiveCompany(unittest.TestCase):
             ),
             patch.object(erp_link, "_check_permission"),
             patch("batch_projects.access.require_capability"),
-            patch.object(erp_link, "require_feature"),
             patch(
                 "batch_projects.milestone_billing.lock_generation_scope",
                 return_value=(
@@ -159,7 +158,6 @@ class TestInvoiceEffectiveCompany(unittest.TestCase):
         with (
             patch.object(erp_link, "_check_permission"),
             patch("batch_projects.access.require_capability"),
-            patch.object(erp_link, "require_feature"),
             patch.object(
                 erp_link.frappe,
                 "get_doc",

@@ -74,11 +74,14 @@ const routes = [
     component: () => import("@/pages/AccountSettings.vue"),
     meta: { title: "Account Settings" },
   },
+  // There are no paid plans any more, so there is no pricing page. Kept as a
+  // redirect rather than deleted outright: bookmarks, and any upsell call site
+  // still pushing `{ name: 'Pricing' }`, land on the dashboard instead of
+  // throwing a router error.
   {
     path: "/workspace/pricing",
     name: "Pricing",
-    component: () => import("@/pages/Billing.vue"),
-    meta: { title: "Pricing" },
+    redirect: "/workspace",
   },
   {
     path: "/workspace/projects/tree",

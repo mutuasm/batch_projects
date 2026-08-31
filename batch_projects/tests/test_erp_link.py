@@ -5,11 +5,11 @@ Run with:
 """
 import unittest
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import random_string
 
 
-class TestERPLinkIntegration(FrappeTestCase):
+class TestERPLinkIntegration(IntegrationTestCase):
     """Covers Phase B (after_insert / on_update hooks in bp_project.py)
     and Phase C (reconcile_erpnext_sync background job in erp_link.py)."""
 

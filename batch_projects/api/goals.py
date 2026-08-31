@@ -4,19 +4,13 @@ import json
 import frappe
 from frappe import _
 
-from batch_projects.entitlements import require_feature
 from batch_projects.api.board import _require_system_user
 
 
-def _guard():
-    """Verify gateway signature — reject direct-to-Frappe calls."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
 
 def _require_gates():
     """Tier gate: goals are a Business-tier feature."""
-    require_feature("goals")
 
 
 def _assert_workspace_admin():
@@ -43,7 +37,6 @@ def _compute_progress(goal_name):
 @frappe.whitelist()
 def list_goals():
     """List all goals with live-computed progress."""
-    _guard()
     _require_gates()
     # _guard/_require_gates check the request came through the gateway and
     # the workspace's tier — neither checks WHO is calling. Without this,
@@ -62,7 +55,6 @@ def list_goals():
 @frappe.whitelist()
 def get_goal(goal):
     """Get a single goal with live-computed progress."""
-    _guard()
     _require_gates()
     _require_system_user()
     doc = frappe.get_doc("BP Goal", goal)
@@ -79,7 +71,6 @@ def get_goal(goal):
 @frappe.whitelist()
 def create_goal(title, status=None, color=None, owner=None,
                 start_date=None, end_date=None, description=None):
-    _guard()
     _require_gates()
     _assert_workspace_admin()
     if not (title or "").strip():
@@ -102,7 +93,6 @@ def create_goal(title, status=None, color=None, owner=None,
 
 @frappe.whitelist()
 def update_goal(goal, fields):
-    _guard()
     _require_gates()
     if isinstance(fields, str):
         fields = json.loads(fields)
@@ -123,7 +113,6 @@ def update_goal(goal, fields):
 
 @frappe.whitelist()
 def delete_goal(goal):
-    _guard()
     _require_gates()
     _assert_workspace_admin()
     # Delete child epic links first
@@ -137,7 +126,6 @@ def delete_goal(goal):
 @frappe.whitelist()
 def link_epic_to_goal(goal, epic):
     """Add an epic to a goal's linked_epics table."""
-    _guard()
     _require_gates()
     _assert_workspace_admin()
     doc = frappe.get_doc("BP Goal", goal)
@@ -154,7 +142,6 @@ def link_epic_to_goal(goal, epic):
 @frappe.whitelist()
 def unlink_epic_from_goal(goal, epic):
     """Remove an epic from a goal's linked_epics table."""
-    _guard()
     _require_gates()
     _assert_workspace_admin()
     doc = frappe.get_doc("BP Goal", goal)

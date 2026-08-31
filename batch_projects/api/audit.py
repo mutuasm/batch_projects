@@ -64,8 +64,6 @@ def list_events(project=None, event=None, limit=50, start=0):
     if "System Manager" not in frappe.get_roles(frappe.session.user) and frappe.session.user != "Administrator":
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-    from batch_projects.entitlements import require_feature
-    require_feature("audit_log")
 
     filters = {}
     if project:

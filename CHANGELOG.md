@@ -92,6 +92,111 @@ path from pre-1.0 exists by design (no production data to migrate).
 
 ---
 
+## [2.0.0] — 2026-08-31
+
+Retargets BatchProjects to **Frappe/ERPNext v16**, removes the paid-plan and
+gateway licensing model entirely, and makes BatchProjects the default Projects
+module in ERPNext.
+
+### Breaking changes
+
+- **All paid tiers, licence keys and seat caps are removed.** Every feature is
+  enabled on every install. The `starter/team/business/enterprise` ladder, the
+  `feature → minimum tier` catalog, `X-BP-Tier` / `X-BP-Max-Users` header
+  resolution and the 24h tier cache are gone from `entitlements.py`.
+  - `require_feature()` / `is_feature_enabled()` remain as always-allow shims
+    so historical call sites keep working; they never raise. ~70 call sites
+    were removed outright.
+  - `assert_seat_available()`, `assert_seats_available()`, `is_seated()`,
+    `current_max_users()`, `current_tier()`, `current_packs()` and
+    `before_member_insert()` are **removed**. Project/team membership is
+    unlimited.
+  - `get_entitlements()` keeps its response shape (the SPA bootstraps off it)
+    but reports every feature enabled, `max_users: 0` (unlimited) and null
+    licence/expiry fields.
+- **The gateway licensing and identity layer is removed.**
+  - `gateway_guard.py` is deleted, along with the `auth_hooks` identity
+    handoff and `verify_gateway_request()` (removed from 16 modules).
+  - `gateway_min_version` is removed from `hooks.py`.
+  - The ReBAC push-down is removed: `_rebac_scope()` and its branches in
+    `permissions.py` / `notification_permissions.py`, the write-side sync in
+    `events.py` / `task_lifecycle.py` / `task_invariants.py`, and the
+    `sync_rebac_state` rebuild endpoint. **Authorization is now enforced
+    solely by BatchProjects' own project-scoped SQL permission model** — the
+    same model every unverified request already fell back to.
+  - `automation_engine()` always resolves to the in-process Python matcher.
+- **Frontend:** the pricing page, plan catalog (`plans.json`), checkout,
+  subscription and billing-portal API helpers are removed.
+  `/workspace/pricing` now redirects to `/workspace`. The entitlements store's
+  `can()` always returns true and `showUpgradePrompt()` is a no-op.
+
+### Added
+
+- **BatchProjects is the default ERPNext Projects module.**
+  - `doctype_list_js` redirects the stock `Project` and `Task` desk list views
+    into the SPA, so the BP project list is the default project list. Append
+    `?desk=1` to load the stock ERPNext list for imports, bulk edits or Report
+    Builder; the choice persists for the browser session.
+  - A first-class v16 `Workspace Sidebar` record
+    (`batch_projects/workspace_sidebar/batchprojects.json`) with Plan / Work /
+    Insight / People / Records / Settings sections.
+  - `setup/projects_module.py` re-points ERPNext's own `Projects` sidebar at
+    the SPA, wired to `after_migrate` because that record is `standard: 1` and
+    is re-imported (reverting the override) on every `bench migrate`. It
+    suppresses `WorkspaceSidebar.export_sidebar()` via `frappe.flags.in_import`
+    so it never rewrites erpnext's own JSON on a developer_mode bench.
+  - ERPNext's Timesheet, Activity Type/Cost, Projects Settings and reports are
+    deliberately left untouched — costing and billing stay in ERPNext.
+
+### Changed
+
+- **Test base class migrated to `frappe.tests.IntegrationTestCase`** (40 files,
+  121 classes), off the deprecated `frappe.tests.utils.FrappeTestCase`. This is
+  required on v16, not cosmetic: v16's test runner dispatches `FrappeTestCase`
+  into the `old-frappe-test-class-category`, whose compat preparation runs
+  `compat_preload_test_records_upfront()` — an eager walk of every test module's
+  dependency doctypes. That walk raises `DoesNotExistError` for any doctype
+  belonging to an app that isn't installed (here `Payment Gateway`, from the
+  `payments` app), aborting the run *after* the tests themselves pass.
+  `IntegrationTestCase` lands in the plain `integration` category and generates
+  records only for module-declared `EXTRA_TEST_RECORD_DEPENDENCIES`, of which
+  this app declares none.
+- `test_ignore` renamed to `IGNORE_TEST_RECORD_DEPENDENCIES` in the two
+  doctype-folder test modules (old name warns on v16, removed in v17).
+- **CI now installs the `payments` app** (test environment only — not an app
+  dependency, and nothing here imports it). ERPNext's `Payment Gateway Account`
+  links to `Payment Gateway`, which lives in `payments`; frappe's test-record
+  dependency walker resolves that link and aborts the run with
+  `DoesNotExistError` when the app is absent. ERPNext's own CI installs it for
+  the same reason. Pruning the dependency instead was not viable: `Payment
+  Gateway Account` converges from 7 of BP Project's 11 direct links (all via
+  `Subscription Plan`), so the ignore list would have had to drop Company,
+  Customer, Project, Sales Order, Quotation, Opportunity and Lead — precisely
+  the records those tests need.
+- `frappe`/`erpnext` dependency pins moved to `>=16.0.0,<17.0.0`.
+- `requires-python` raised to `>=3.14` (Frappe v16 requires 3.14–3.15);
+  frontend `engines.node` set to `>=24`.
+- CI: Python 3.14, Node 24, `FRAPPE_BRANCH`/`ERPNEXT_BRANCH` `version-16`;
+  integration branch `develop-15` → `develop-16`. MariaDB stays on 10.6 —
+  v16's documented floor, and 11.x breaks the job's `mysqladmin` health check.
+- Branch model retargeted to the v16 line throughout the docs.
+
+- `deploy/gateway-setup.md` is **removed**. It documented licence keys, a
+  60-day trial, a license server and server-side revocation — none of which
+  exist any more. `deploy/README.md` now documents the six `site_config.json`
+  keys the code actually reads for the optional side-car, all fail-closed.
+
+### Notes
+
+- Existing `/app/<doctype>/<name>` deep links continue to work: v16 moved the
+  desk to `/desk` but ships an `/app/(.*)` → `/desk/\1` redirect.
+- The committed SPA bundle under `batch_projects/public/frontend/` is rebuilt
+  in this release; CI's `frontend-dist-drift` job enforces that it matches a
+  fresh `yarn build` of `frontend/src`.
+- The optional automation side-car (`bridge.py`) is retained for durable
+  automation timers and realtime fan-out. It gates no features and no-ops when
+  `bp_bridge_url` is unset.
+
 ## [Unreleased]
 
 - Sprint Mode toggle (project-level setting)

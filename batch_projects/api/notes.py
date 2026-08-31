@@ -23,9 +23,6 @@ from batch_projects import access
 from batch_projects.entitlements import require_workspace_feature
 
 
-def _guard():
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
 
 def _note_dict(doc) -> dict:
@@ -44,7 +41,6 @@ def _note_dict(doc) -> dict:
 
 @frappe.whitelist()
 def list_notes(project):
-    _guard()
     access.require(project, "Viewer")
     require_workspace_feature("notes")
 
@@ -57,7 +53,6 @@ def list_notes(project):
 
 @frappe.whitelist()
 def create_note(project, title="", content="", pinned=0):
-    _guard()
     access.require(project, "Member")
     require_workspace_feature("notes")
 
@@ -86,7 +81,6 @@ def _load_and_authorize(name):
 
 @frappe.whitelist()
 def update_note(name, title=None, content=None, pinned=None):
-    _guard()
     require_workspace_feature("notes")
     doc = _load_and_authorize(name)
 
@@ -104,7 +98,6 @@ def update_note(name, title=None, content=None, pinned=None):
 
 @frappe.whitelist()
 def delete_note(name):
-    _guard()
     require_workspace_feature("notes")
     doc = _load_and_authorize(name)
 

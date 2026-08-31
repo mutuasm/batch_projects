@@ -1,147 +1,63 @@
 """
 batch_projects/entitlements.py
 ──────────────────────────────
-Feature gating = how batch_projects is monetized.
+Workspace feature switches. **There is no paid tier, licence, seat cap or
+gateway in BatchProjects any more** — every feature ships enabled for every
+install.
 
-The licensed Go gateway is the single ingress to this site. It validates the
-license JWT and injects trusted headers on every proxied request:
+This module used to be the monetization map: a tier ladder (starter → team →
+business → enterprise) resolved from a bp-gateway-signed `X-BP-Tier` header,
+a seat cap from `X-BP-Max-Users`, and a `feature → minimum tier` catalog that
+gated ~20 surfaces. All of that is gone, along with the gateway that asserted
+it. What remains is the one switch that was never about money:
 
-    X-BP-Tier       starter | team | business | enterprise   (the plan)
-    X-BP-Packs      comma-separated vertical packs (ps, construction, software, ai)
-    X-BP-Max-Users  integer
-    X-BP-Tenant     tenant id
+    BP Workspace Settings.features_json — a workspace admin turning a surface
+    off for their own org (notes, draw, gantt, money tab, timesheets,
+    reports).
 
-Because the compose exposes ONLY the gateway (never Frappe directly), these
-headers are trusted. When there is no header (no license, or direct dev
-access) we default to the FREE tier — `starter`. That is the scarcity: the
-app installs and runs free, premium features are locked until a license
-raises the tier.
+`is_feature_enabled()` / `require_feature()` are kept as always-allow shims so
+the ~70 historical call sites keep working and can be removed incrementally;
+they are no-ops and never raise. New code should not call them.
 
-Resolution order for the current tier:
-    1. X-BP-Tier request header — ONLY if gateway_guard verified this
-       request's HMAC signature (frappe.local._bp_gateway_verified). An
-       unsigned or unverifiable header is never trusted, same fail-closed
-       rule current_max_users() already applies to X-BP-Max-Users.
-    2. site_config "bp_dev_tier" — dev/testing override, but ONLY on sites
-       that have NOT configured bp_gateway_shared_secret AND have Frappe's
-       own developer_mode turned on. A site with the secret set has
-       declared itself gateway-enforced; honoring bp_dev_tier there would
-       let a request that skips the gateway entirely (e.g. a direct curl to
-       Frappe's own port) self-assert any paid tier for free. The
-       developer_mode requirement closes the other half of that gap: a
-       production site that simply never got a gateway installed could
-       otherwise set bp_dev_tier itself and unlock every Frappe-side
-       feature gate permanently, for free, with no gateway involved at
-       all — confirmed as a real, working bypass, not a hypothetical one.
-       developer_mode is a real Frappe flag with its own very visible
-       production costs (verbose tracebacks shown to users, degraded
-       caching), so a customer flipping it on purely to also flip
-       bp_dev_tier is trading away things no real production site wants —
-       while genuine local dev/test sites already run with it on anyway,
-       so the legitimate use case is unaffected. Both resolution steps are
-       fail-closed for exactly this reason.
-    3. last value cached from a prior request (for background jobs/scheduler)
-    4. "starter"                       (free)
+`get_entitlements()` keeps its original response shape — the SPA bootstraps
+off it — but every feature reports enabled and seats report unlimited.
 """
+
+import json
 
 import frappe
 
-
-# Plan ranking — higher unlocks everything below it.
-# Growth/Pro/Team share one feature tier (rank 1); Business (rank 2) and
-# Enterprise (rank 3) are the only tiers with additional feature gates.
-# The actual differentiator between Team/Growth/Pro is max_users, not features.
-_TIER_RANK = {
-    "starter":    0,
-    "team":       1,
-    "business":   2,
-    "enterprise": 3,
-    "growth":     1,
-    "pro":        1,
-    "dev":        99,  # local dev only — unlocks all
-}
-
-_TIER_LABEL = {
-    "starter":    "Community",
-    "growth":     "Growth",
-    "pro":        "Pro",
-    "team":       "Team",
-    "business":   "Business",
-    "enterprise": "Enterprise",
-    "dev":        "Developer",
-}
-
-# Feature catalog: feature → minimum tier that unlocks it.
-# This is the monetization map. Keep it as the single source of truth.
-# Mirrors bp-gateway internal/license featureMinTier — the bridge is the
-# authoritative enforcer; this copy gates in-app UI + server fallbacks.
-_FEATURE_MIN_TIER = {
-    # Team
-    "automations": "team",
-    "webhooks": "team",
-    "templates": "team",
-    "scheduler": "team",
-    "integrations": "team",
-    "intake_forms": "team",
-    "time_tracking": "team",
-    "realtime": "team",
-    "share_links": "team",
-    "draw": "team",
-    # Deliberately NOT reusing "automations" (the Go-binary,
-    # document-mutating tier). Notification rules are routing only; keeping
-    # a separate flag preserves the open-core boundary — collapsing it
-    # would blur the line between "routes a notification" and
-    # "mutates a document".
-    "notification_rules": "team",
-    # Gates CREATE/EDIT of workspace-scoped or shared (visibility
-    # =workspace) dashboards only. A private, project-scoped report is the
-    # pre-existing free "Reports" feature and stays ungated — see
-    # _require_dashboards_entitlement_if_shared in api/board.py.
-    "dashboards": "team",
-    "exports": "team",
-    "custom_branding": "team",
-    "goals": "team",
-    # Business
-    "profitability": "team",
-    "portfolio": "team",
-    "billing_writeback": "team",
-    "api": "team",
-    # Enterprise
-    "sso": "business",
-    "audit_log": "business",
-}
-
-_TIER_CACHE_KEY = "bp_current_tier"
-
-# How long a gateway-asserted tier/seat-cap stays trusted after the last
-# verified request. MUST NOT be unbounded.
-#
-# These caches exist for ONE reason: background jobs (scheduler, RQ workers)
-# have no HTTP request, so they can't read the gateway's signed X-BP-Tier
-# header and would otherwise all run as `starter`. They are a convenience for
-# code paths the gateway cannot reach — never an entitlement source of truth.
-#
-# Written with no expiry, they became exactly that. Redis kept `bp_current_tier`
-# = the last paid tier FOREVER, so once any gateway-verified request had ever
-# touched a site, `current_tier()` returned that tier for good — with the
-# gateway stopped, uninstalled, or the licence expired/revoked/downgraded.
-# bp-license's revoke path and expire_trials() both work by declining to
-# re-issue the JWT; with nothing ever re-reading it, both were no-ops. A lapsed
-# 60-day Business trial stayed Business permanently.
-#
-# 24h is deliberate: the gateway phone-homes daily (license.go StartPhoneHome)
-# and every proxied request rewrites these keys, so a healthy install refreshes
-# them continuously and never notices the TTL — while a site the gateway has
-# genuinely stopped fronting decays to `starter` within one licence-refresh
-# cycle. Shorter would downgrade legitimately quiet sites mid-cycle (an
-# overnight gap between the last user request and a 3am scheduled automation is
-# routinely 12h+); unbounded is what we just fixed.
-_TIER_CACHE_TTL_SECONDS = 24 * 60 * 60
+# Every feature key the SPA knows about. This is no longer a monetization map:
+# it exists only so `get_entitlements()` can keep returning the
+# `{feature: bool}` dict the frontend bootstraps against. Every value is True.
+_ALL_FEATURES = (
+    "automations",
+    "webhooks",
+    "templates",
+    "scheduler",
+    "integrations",
+    "intake_forms",
+    "time_tracking",
+    "realtime",
+    "share_links",
+    "draw",
+    "notification_rules",
+    "dashboards",
+    "exports",
+    "custom_branding",
+    "goals",
+    "profitability",
+    "portfolio",
+    "billing_writeback",
+    "api",
+    "sso",
+    "audit_log",
+)
 
 # Workspace-admin-configurable on/off switches (BP Workspace Settings.features_json).
-# Independent of the tier map above — a workspace admin can turn a free, core
-# surface off for their org regardless of plan. Absent key = enabled (opt-out,
-# not opt-in), so a stale record from before a new toggle shipped still passes.
+# A workspace admin can turn a core surface off for their own org. Absent key =
+# enabled (opt-out, not opt-in), so a stale record from before a new toggle
+# shipped still passes.
 _WORKSPACE_FEATURE_DEFAULTS = {
     "notes": True,
     "draw": True,
@@ -152,140 +68,48 @@ _WORKSPACE_FEATURE_DEFAULTS = {
 }
 
 
-class BPUpgradeRequired(frappe.ValidationError):
-    """Raised when a gated feature is used below its required tier.
-    Frontend detects this via exc_type and shows the upgrade CTA."""
-    pass
-
-
 class BPFeatureDisabled(frappe.ValidationError):
-    """Raised when a workspace admin has switched a feature off. Distinct from
-    BPUpgradeRequired (that's a plan limit; this is an admin's own choice) so
-    the frontend can show "ask your admin" instead of an upgrade CTA."""
+    """Raised when a workspace admin has switched a feature off for their org."""
+
     pass
 
 
-# ─── TIER RESOLUTION ─────────────────────────────────────────────────────────
-
-def current_tier() -> str:
-    tier = _tier_from_request()
-    if tier:
-        # write-through so background jobs (scheduler, hooks) see the latest
-        try:
-            frappe.cache().set_value(
-                _TIER_CACHE_KEY, tier, expires_in_sec=_TIER_CACHE_TTL_SECONDS
-            )
-        except Exception:
-            pass
-        return tier
-
-    # Inert on any site that has declared itself gateway-enforced (secret
-    # configured), AND requires Frappe's own developer_mode — see the
-    # module docstring for why both gates exist.
-    if not frappe.conf.get("bp_gateway_shared_secret") and frappe.conf.get("developer_mode"):
-        override = frappe.conf.get("bp_dev_tier")
-        if override:
-            return override
-
-    cached = None
-    try:
-        cached = frappe.cache().get_value(_TIER_CACHE_KEY)
-    except Exception:
-        pass
-    return cached or "starter"
+# Retained so any lingering `except BPUpgradeRequired` / patch target resolves.
+# Nothing raises it any more — there is no plan to upgrade to.
+BPUpgradeRequired = BPFeatureDisabled
 
 
-def _tier_from_request() -> str | None:
-    """Fail-closed, mirrors current_max_users(): only trust X-BP-Tier if the
-    gateway's HMAC signature was verified for this request (gateway_guard.
-    apply_gateway_identity sets the flag). Otherwise a direct-to-Frappe call
-    could self-assert any tier via a plain header."""
-    try:
-        if frappe.request and frappe.request.headers:
-            tier = frappe.request.headers.get("X-BP-Tier")
-            if tier and getattr(frappe.local, "_bp_gateway_verified", False):
-                return tier.strip().lower()
-    except Exception:
-        pass
-    return None
-
-
-def current_packs() -> list[str]:
-    try:
-        if frappe.request and frappe.request.headers:
-            raw = frappe.request.headers.get("X-BP-Packs") or ""
-            return [p.strip() for p in raw.split(",") if p.strip()]
-    except Exception:
-        pass
-    return []
-
+# ─── AUTOMATION ENGINE ───────────────────────────────────────────────────────
 
 def automation_engine() -> str:
-    """Which engine evaluates automation rules: "gateway" (Go) or "python".
+    """Which engine evaluates automation rules.
 
-    An explicit site_config `bp_automation_engine` always wins. With nothing
-    set the default is DERIVED from whether this site is gateway-fronted at
-    all, rather than being hardcoded to "python":
-
-        bp_gateway_shared_secret configured  → "gateway"
-        no shared secret                     → "python"
-
-    Why derived: automations are a paid feature, and a tier above `starter`
-    can only ever arrive on a gateway-signed X-BP-Tier header (see
-    current_tier()). So a site entitled to run automations at all is, by
-    construction, already fronted by a gateway — and its rules belong on the
-    Go engine, which is the enforcement boundary. A site with no shared
-    secret resolves to `starter`, where is_feature_enabled("automations") is
-    False and neither engine runs anything.
-
-    The old hardcoded "python" default meant an entitled, gateway-fronted
-    tenant silently evaluated its rules in-process unless someone hand-edited
-    site_config — nothing in the installer or bp-license bootstrap has ever
-    set this flag. That put the whole paid matcher on the open, patchable
-    path by default; deriving it closes that without requiring any existing
-    install to be reconfigured.
-
-    Single source of truth for the flag — events.py, bp_automation_rule.py
-    and api/workflows.py all resolve through here so the default can never
-    drift between them again.
+    The Go gateway engine is gone, so this is always the in-process Python
+    matcher. A site_config `bp_automation_engine` override is still honoured so
+    an operator can point at a future engine without a code change, but nothing
+    ships one.
     """
     explicit = (frappe.conf.get("bp_automation_engine") or "").strip().lower()
-    if explicit:
-        return explicit
-    return "gateway" if frappe.conf.get("bp_gateway_shared_secret") else "python"
+    return explicit or "python"
 
 
-# ─── FEATURE CHECKS ──────────────────────────────────────────────────────────
+# ─── FEATURE CHECKS (always-allow shims) ─────────────────────────────────────
 
 def is_feature_enabled(feature: str) -> bool:
-    min_tier = _FEATURE_MIN_TIER.get(feature)
-    if min_tier is None:
-        return True  # uncatalogued features are free by default
-    return _TIER_RANK.get(current_tier(), 0) >= _TIER_RANK.get(min_tier, 0)
+    """Always True. Kept for the historical call sites; there are no tiers."""
+    return True
 
 
 def require_feature(feature: str):
-    """Raise BPUpgradeRequired if the current tier can't use `feature`."""
-    if not is_feature_enabled(feature):
-        min_tier = _FEATURE_MIN_TIER.get(feature, "team")
-        frappe.throw(
-            # Deliberately does NOT name a tier. Plans differ by seat count,
-            # not by feature, so "requires the Business plan" was both
-            # inconsistent across screens and wrong about how pricing works.
-            # Tone: state availability, don't demand payment. Naming a tier
-            # was also wrong — plans differ by seat count, not by feature.
-            "This one's available on any paid plan.",
-            exc=BPUpgradeRequired,
-            title="Available on paid plans",
-        )
+    """No-op. Kept for the historical call sites; there are no tiers."""
+    return None
 
 
-# ─── WORKSPACE FEATURE TOGGLES (admin-configured, tier-independent) ───────────
+# ─── WORKSPACE ADMIN TOGGLES (the real, remaining switch) ────────────────────
 
 def get_workspace_features() -> dict:
     """The effective on/off state of every workspace-toggleable feature,
     defaults applied for anything the settings record doesn't mention yet."""
-    import json
     flags = dict(_WORKSPACE_FEATURE_DEFAULTS)
     try:
         raw = frappe.db.get_single_value("BP Workspace Settings", "features_json")
@@ -305,8 +129,7 @@ def is_workspace_feature_enabled(feature: str) -> bool:
 
 
 def require_workspace_feature(feature: str):
-    """Raise BPFeatureDisabled if a workspace admin has switched `feature` off.
-    Independent of require_feature (tier) — call both where both apply."""
+    """Raise BPFeatureDisabled if a workspace admin has switched `feature` off."""
     if not is_workspace_feature_enabled(feature):
         frappe.throw(
             f"The {feature.replace('_', ' ').title()} feature has been turned "
@@ -317,263 +140,92 @@ def require_workspace_feature(feature: str):
         )
 
 
-# ─── SEATS ───────────────────────────────────────────────────────────────────
-
-# Fallback seat caps used ONLY when all other sources are unavailable:
-#   - No HTTP request (background job)
-#   - No bp_dev_max_users site config override
-#   - Nothing cached from a prior request
-#   - No gateway-signed X-BP-Max-Users header
+# ─── SEATS (uncapped) ────────────────────────────────────────────────────────
 #
-# This is NOT the live tier ladder. The live cap comes from the license JWT's
-# MaxUsers claim, injected by the gateway as X-BP-Max-Users with an HMAC
-# signature that gateway_guard.py verifies. These fallbacks exist only so the
-# app doesn't crash when the gateway is unreachable.
-#
-# 0 means unlimited.
-_UNLICENSED_FALLBACK_MAX_USERS = {
-    "starter": 5,      # Community (matches PLAN_USER_MAP/plans.py)
-    "growth": 10,      # $29/mo
-    "pro": 20,         # $59/mo
-    "business": 50,    # $149/mo
-    "team": 25,        # legacy tier
-    "enterprise": 0,   # unlimited
-    "dev": 0,          # unlimited
-}
-_MAX_USERS_CACHE_KEY = "bp_current_max_users"
-
-
-def current_max_users() -> int:
-    """Licensed seat cap (0 = unlimited). Header is live truth; cached for
-    background jobs; falls back to the fallback table.
-
-    Fail-closed: if the request carries an X-BP-Max-Users header but the
-    gateway signature was NOT verified (gateway_guard.py sets the flag),
-    the header is ignored — prevents spoofed headers on direct curls."""
-    try:
-        if frappe.request and frappe.request.headers:
-            mu = frappe.request.headers.get("X-BP-Max-Users")
-            if mu:
-                # Fail-closed: only trust the header if the gateway signature
-                # was verified for this request. Otherwise ignore it.
-                if getattr(frappe.local, "_bp_gateway_verified", False):
-                    val = int(mu)
-                    try:
-                        frappe.cache().set_value(
-                            _MAX_USERS_CACHE_KEY, val,
-                            expires_in_sec=_TIER_CACHE_TTL_SECONDS,
-                        )
-                    except Exception:
-                        pass
-                    return val
-    except Exception:
-        pass
-    # Same fail-closed rule current_tier() applies to bp_dev_tier:
-    # bp_dev_max_users must be inert on any site that
-    # has declared itself gateway-enforced (bp_gateway_shared_secret set),
-    # AND requires developer_mode too — a production site that never
-    # configured a gateway at all could otherwise set this itself and grant
-    # unlimited seats for free, permanently, with nothing to enforce
-    # otherwise. Without the bp_gateway_shared_secret guard specifically, a
-    # request that arrives with no verified header at all — a background
-    # job, or a direct-to-Frappe call that skips the gateway entirely —
-    # would let a stale/misconfigured bp_dev_max_users silently override
-    # the real cap on a site that's supposed to be fully gateway-enforced.
-    if not frappe.conf.get("bp_gateway_shared_secret") and frappe.conf.get("developer_mode"):
-        override = frappe.conf.get("bp_dev_max_users")
-        if override is not None:
-            return int(override)
-    try:
-        cached = frappe.cache().get_value(_MAX_USERS_CACHE_KEY)
-        if cached is not None:
-            return int(cached)
-    except Exception:
-        pass
-    return _UNLICENSED_FALLBACK_MAX_USERS.get(current_tier(), 3)
-
-
-def _seated_users() -> set:
-    seated = set(frappe.get_all("BP Project Member", pluck="user", distinct=True))
-    seated |= set(frappe.get_all("BP Team Member", pluck="user", distinct=True))
-    seated.discard(None)
-    return seated
-
+# Seat caps were a licence artifact. Membership is now unlimited; the count is
+# still reported because the SPA renders it as a plain "N members" stat.
 
 def count_active_seats() -> int:
-    """A seat = a distinct enabled System User holding at least one project
-    OR team membership. Guests count (they occupy collaboration capacity)."""
-    seated = _seated_users()
-    if not seated:
-        return 0
-    return len(frappe.get_all(
-        "User",
-        filters={"name": ["in", list(seated)], "enabled": 1,
-                 "user_type": "System User"},
-        pluck="name",
-    ))
+    """How many distinct users hold a project or team membership."""
+    rows = frappe.get_all("BP Project Member", fields=["user"], pluck="user")
+    team_rows = frappe.get_all("BP Team Member", fields=["user"], pluck="user")
+    return len({u for u in list(rows) + list(team_rows) if u})
 
 
-def is_seated(user: str) -> bool:
-    return bool(
-        frappe.db.exists("BP Project Member", {"user": user})
-        or frappe.db.exists("BP Team Member", {"user": user})
-    )
-
-
-def assert_seat_available(new_user: str):
-    """Raise BPUpgradeRequired when adding `new_user` would exceed the cap.
-    A user who already holds any membership occupies a seat — re-adding them
-    to another project is always allowed."""
-    cap = current_max_users()
-    if not cap:
-        return
-    if is_seated(new_user):
-        return
-    if count_active_seats() >= cap:
-        frappe.throw(
-            f"Your plan includes {cap} seats and all are in use. "
-            f"Upgrade your plan to add more people.",
-            exc=BPUpgradeRequired,
-            title="Seat limit reached",
-        )
-
-
-def assert_seats_available(needed: int):
-    """Bulk variant for call sites adding several users in one request — checking
-    one-by-one against the same count would let N users through the last seat."""
-    cap = current_max_users()
-    if not cap or needed <= 0:
-        return
-    if count_active_seats() + needed > cap:
-        frappe.throw(
-            f"Your plan includes {cap} seats; adding {needed} more people would "
-            f"exceed it. Upgrade your plan to add more seats.",
-            exc=BPUpgradeRequired,
-            title="Seat limit reached",
-        )
-
-
-# ─── DOC-EVENTS HOOKS (catches every insertion path, incl. generic REST API) ──
-
-def before_member_insert(doc, method):
-    """doc_events hook for BP Project Member and BP Team Member `before_insert`.
-    Catches ALL insertion paths: ORM saves, batch operations, the generic REST
-    API — without needing to hunt down every direct-SQL call site."""
-    user = doc.get("user")
-    if user:
-        assert_seat_available(user)
-
-
-# ─── SPA BOOTSTRAP ───────────────────────────────────────────────────────────
-
-@frappe.whitelist()
-def get_entitlements():
-    """Drives the SPA: which tier the install is on and which features are unlocked."""
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
-    tier = current_tier()
-    max_users = None
-    try:
-        if frappe.request and frappe.request.headers:
-            mu = frappe.request.headers.get("X-BP-Max-Users")
-            max_users = int(mu) if mu else None
-    except Exception:
-        pass
-
-    from batch_projects import access
-
-    # Read license expiry info from gateway-injected headers
-    expires_at = None
-    days_remaining = None
-    is_trial = False
-    trial_days_remaining = None
-    try:
-        if frappe.request and frappe.request.headers:
-            exp_str = frappe.request.headers.get("X-BP-Expires-At")
-            if exp_str:
-                expires_at = exp_str
-            days_str = frappe.request.headers.get("X-BP-Days-Remaining")
-            if days_str:
-                days_remaining = int(days_str)
-            # register()'s no-payment 60-day Business trial (bp-license) —
-            # deliberately independent of expires_at/days_remaining above,
-            # which stay at the same "never expires" value a trial license
-            # carries its whole life (see bp-gateway license.go's
-            # LicenseClaims comment). This is purely a banner signal.
-            is_trial = frappe.request.headers.get("X-BP-Trial") == "true"
-            trial_days_str = frappe.request.headers.get("X-BP-Trial-Days-Remaining")
-            if trial_days_str:
-                trial_days_remaining = int(trial_days_str)
-    except Exception:
-        pass
-
-    return {
-        "tier": tier,
-        "tier_label": _TIER_LABEL.get(tier, tier.title()),
-        "packs": current_packs(),
-        "features": {f: is_feature_enabled(f) for f in _FEATURE_MIN_TIER},
-        "feature_min_tier": dict(_FEATURE_MIN_TIER),
-        # License expiry info (from gateway headers)
-        "expires_at": expires_at,
-        "is_trial": is_trial,
-        "trial_days_remaining": trial_days_remaining,
-        "days_remaining": days_remaining,
-        # Admin on/off switches (BP Workspace Settings) — orthogonal to the
-        # tier map above; a feature must clear BOTH to render/act.
-        "workspace_features": get_workspace_features(),
-        # Cheap boolean so the sidebar/router can show the Workspace Settings
-        # entry without a second bootstrap round trip — the settings API
-        # re-checks this server-side regardless, this is UI-visibility only.
-        "is_workspace_admin": access.is_workspace_admin(),
-        "limits": {"max_users": max_users},
-        "seats_used": count_active_seats(),
-        # The resolved {role: {capability: bool}} grid. Same role
-        # for every project (it's a workspace-wide policy, not project data),
-        # so it's piggybacked on this existing bootstrap rather than a new
-        # endpoint — the frontend combines it with the per-project role it
-        # already resolves per project switch (project store's
-        # get_my_capabilities call) to decide "can I see money/files HERE".
-        "capability_matrix": access.get_capability_matrix(),
-        # Cross-project surfaces (the margin report has no single project to
-        # resolve a role against) get a pre-resolved boolean instead — UI-
-        # visibility only, the endpoint re-checks server-side regardless.
-        "view_money_anywhere": access.has_capability_anywhere("view_money"),
-        # White-label branding — applies to every member's shell (sidebar +
-        # favicon), not just admins, so it rides this bootstrap rather than
-        # the admin-only get_workspace_settings. Null fields = default
-        # branding; only populated when the workspace is entitled, so a
-        # downgrade silently reverts every session to stock branding without
-        # needing to touch the stored record.
-        "branding": get_branding(),
-        # The SPA's own get_projects is deliberately access-filtered, so
-        # "my project list is empty" can mean either "this workspace has
-        # no projects at all"
-        # (true first-run — show the create-workspace wizard) or "projects
-        # exist but none are shared with me yet" (an invited teammate —
-        # show a lightweight join/waiting state instead). This is the
-        # workspace-wide, unfiltered fact the SPA can't derive from its own
-        # already-scoped project list.
-        "workspace_has_projects": bool(frappe.db.exists("BP Project", {})),
-        # Per-user "I've already seen/skipped onboarding" — without this,
-        # onboarding re-fired on every reload for anyone who skipped it
-        # (the old trigger was purely "do I currently see zero projects").
-        # frappe.defaults (core per-user key/value store) rather than a new
-        # User custom field — no schema change needed for one boolean flag.
-        "onboarding_dismissed": frappe.defaults.get_user_default("bp_onboarding_dismissed") == "1",
-        "dismissed_nudges": _dismissed_nudges(),
-    }
-
+# ─── BRANDING ────────────────────────────────────────────────────────────────
 
 def get_branding():
-    if not is_feature_enabled("custom_branding"):
+    """White-label branding for every member's shell. Previously gated behind
+    the `custom_branding` tier feature; now always available."""
+    try:
+        doc = frappe.get_single("BP Workspace Settings")
+    except Exception:
         return {"brand_name": None, "logo_url": None, "favicon_url": None}
-    doc = frappe.get_single("BP Workspace Settings")
     return {
         "brand_name": doc.brand_name or None,
         "logo_url": doc.logo_url or None,
         "favicon_url": doc.favicon_url or None,
     }
 
+
+# ─── SPA BOOTSTRAP ───────────────────────────────────────────────────────────
+
+@frappe.whitelist()
+def get_entitlements():
+    """Drives the SPA bootstrap.
+
+    Response shape is unchanged from the licensed era so the frontend needs no
+    rewrite, but every feature reports enabled, seats are unlimited, and all
+    licence/expiry fields are permanently null.
+    """
+    from batch_projects import access
+
+    return {
+        # No tiers. Reported as the single edition this app now ships.
+        "tier": "community",
+        "tier_label": "Community",
+        "packs": [],
+        "features": {f: True for f in _ALL_FEATURES},
+        # Retained key, now empty: nothing has a minimum tier.
+        "feature_min_tier": {},
+        # Licence fields kept as nulls purely so the SPA's optional-chaining
+        # banner logic keeps type-checking; there is no licence to expire.
+        "expires_at": None,
+        "is_trial": False,
+        "trial_days_remaining": None,
+        "days_remaining": None,
+        # Admin on/off switches (BP Workspace Settings) — the one real gate.
+        "workspace_features": get_workspace_features(),
+        # Cheap boolean so the sidebar/router can show the Workspace Settings
+        # entry without a second bootstrap round trip — the settings API
+        # re-checks this server-side regardless, this is UI-visibility only.
+        "is_workspace_admin": access.is_workspace_admin(),
+        # 0 = unlimited.
+        "limits": {"max_users": 0},
+        "seats_used": count_active_seats(),
+        # The resolved {role: {capability: bool}} grid. Same role for every
+        # project (it's a workspace-wide policy, not project data), so it's
+        # piggybacked on this existing bootstrap rather than a new endpoint.
+        "capability_matrix": access.get_capability_matrix(),
+        # Cross-project surfaces (the margin report has no single project to
+        # resolve a role against) get a pre-resolved boolean instead — UI-
+        # visibility only, the endpoint re-checks server-side regardless.
+        "view_money_anywhere": access.has_capability_anywhere("view_money"),
+        "branding": get_branding(),
+        # The SPA's own get_projects is deliberately access-filtered, so
+        # "my project list is empty" can mean either "this workspace has no
+        # projects at all" (true first-run — show the create-workspace wizard)
+        # or "projects exist but none are shared with me yet" (an invited
+        # teammate — show a lightweight join/waiting state instead).
+        "workspace_has_projects": bool(frappe.db.exists("BP Project", {})),
+        # Per-user "I've already seen/skipped onboarding" — without this,
+        # onboarding re-fired on every reload for anyone who skipped it.
+        "onboarding_dismissed": frappe.defaults.get_user_default("bp_onboarding_dismissed") == "1",
+        "dismissed_nudges": _dismissed_nudges(),
+    }
+
+
+# ─── ONBOARDING / NUDGE DISMISSAL ────────────────────────────────────────────
 
 @frappe.whitelist()
 def dismiss_onboarding():

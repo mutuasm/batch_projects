@@ -24,7 +24,7 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import cache
 from batch_projects.api import board
@@ -110,7 +110,7 @@ def _make_task(project, title, assignees=None, **extra):
 
 # ─── Finding 1: cache.py per-user isolation ────────────────────────────────
 
-class TestCachePerUserGeneration(FrappeTestCase):
+class TestCachePerUserGeneration(IntegrationTestCase):
     """Unit coverage of cache.py's own key/generation mechanics — real Redis
     via frappe.cache(), no mocking."""
 
@@ -141,7 +141,7 @@ class TestCachePerUserGeneration(FrappeTestCase):
         self.assertIsNone(cache.get(cache.VIEW_BACKLOG, self.PROJECT, user="rbr-viewer@example.com"))
 
 
-class TestBoardBacklogCacheUserIsolation(FrappeTestCase):
+class TestBoardBacklogCacheUserIsolation(IntegrationTestCase):
     """The audit's own suggested regression, built for real: a Manager-only
     custom field is set on a task; an Admin's get_board/get_backlog call
     warms the cache (and legitimately sees the field); a real low-privilege
@@ -219,7 +219,7 @@ class TestBoardBacklogCacheUserIsolation(FrappeTestCase):
         self.assertNotIn(self.field, viewer_row["custom_field_values"])
 
 
-class TestGetBacklogMoneyFieldGate(FrappeTestCase):
+class TestGetBacklogMoneyFieldGate(IntegrationTestCase):
     """get_backlog() must strip `billable` the same way task_reads.py's
     _sanitize_task_fields() does for the single-task detail view, gated on
     the view_money capability. view_money defaults to True for every role
@@ -257,7 +257,7 @@ class TestGetBacklogMoneyFieldGate(FrappeTestCase):
 
 # ─── Finding 3: _fetch_task_links / _fetch_task_refs permission filtering ──
 
-class TestFetchTaskLinksAndRefsFiltering(FrappeTestCase):
+class TestFetchTaskLinksAndRefsFiltering(IntegrationTestCase):
     """board.py's board/list/backlog reads went through these two helpers
     with zero visibility filtering, unlike task_reads.py's single-task
     get_task(). Same mocking pattern test_task_read_security.py already
@@ -310,7 +310,7 @@ class TestFetchTaskLinksAndRefsFiltering(FrappeTestCase):
 
 # ─── Finding 4: _resolve_scope() invalid-scope fail-closed ────────────────
 
-class TestResolveScopeFailsClosed(FrappeTestCase):
+class TestResolveScopeFailsClosed(IntegrationTestCase):
     _BOGUS = ["definitely-not-a-real-project-xyz", "also-not-real-abc"]
 
     def setUp(self):
@@ -340,7 +340,7 @@ class TestResolveScopeFailsClosed(FrappeTestCase):
 
 # ─── Finding 5: get_workload() accessible-projects filter ─────────────────
 
-class TestGetWorkloadAccessibleProjectsFilter(FrappeTestCase):
+class TestGetWorkloadAccessibleProjectsFilter(IntegrationTestCase):
     KEY_A = "RBRWLA"
     KEY_B = "RBRWLB"
     CALLER = "rbr-wl-caller@example.com"
@@ -403,7 +403,7 @@ class TestGetWorkloadAccessibleProjectsFilter(FrappeTestCase):
 
 # ─── Finding 6: search_tasks(project=None) accessible-projects scoping ────
 
-class TestSearchTasksAccessibleProjectsFilter(FrappeTestCase):
+class TestSearchTasksAccessibleProjectsFilter(IntegrationTestCase):
     KEY_A = "RBRSRA"
     KEY_B = "RBRSRB"
     CALLER = "rbr-search-caller@example.com"
@@ -448,7 +448,7 @@ class TestSearchTasksAccessibleProjectsFilter(FrappeTestCase):
 
 # ─── Finding 7: get_milestones/get_risks(project=None) scoping ────────────
 
-class TestMilestonesAndRisksAccessibleProjectsFilter(FrappeTestCase):
+class TestMilestonesAndRisksAccessibleProjectsFilter(IntegrationTestCase):
     KEY_A = "RBRMRA"
     KEY_B = "RBRMRB"
     CALLER = "rbr-mr-caller@example.com"
@@ -508,7 +508,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class TestWidgetAndBqlAggregationsExcludeTrashedTasks(FrappeTestCase):
+class TestWidgetAndBqlAggregationsExcludeTrashedTasks(IntegrationTestCase):
     """get_widget_data()/query_bql_group_by() aggregated over a bare
     frappe.get_all with no live-task filter — a trashed task still counted
     toward dashboard widget metrics. Both now wrap their task query in

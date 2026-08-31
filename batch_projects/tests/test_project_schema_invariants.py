@@ -13,7 +13,7 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects.api import board
 
@@ -34,7 +34,7 @@ def _get_value_returning(schema_json):
     return _side_effect
 
 
-class TestWorkflowStateInvariants(FrappeTestCase):
+class TestWorkflowStateInvariants(IntegrationTestCase):
     def test_removing_an_in_use_state_is_rejected(self):
         existing = _states({"name": "To Do", "category": "unstarted"}, {"name": "In Progress", "category": "started"})
         with (
@@ -95,7 +95,7 @@ class TestWorkflowStateInvariants(FrappeTestCase):
         set_value.assert_called_once()
 
 
-class TestTaskTypeInvariants(FrappeTestCase):
+class TestTaskTypeInvariants(IntegrationTestCase):
     def test_removing_an_in_use_task_type_is_rejected(self):
         with (
             patch.object(board, "_check_permission"),
@@ -120,7 +120,7 @@ def _label_catalog(*rows):
     return json.dumps(list(rows))
 
 
-class TestLabelInvariants(FrappeTestCase):
+class TestLabelInvariants(IntegrationTestCase):
     """Uses the real {id, label, color} catalog shape throughout — the
     original version of these tests used plain strings (['urgent',
     'backend']), which is not the production schema and let a real bug

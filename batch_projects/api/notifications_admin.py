@@ -16,16 +16,11 @@ import frappe
 import json
 
 from batch_projects import access
-from batch_projects.entitlements import require_feature
 
 
-def _guard():
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
 
 def _require_admin():
-    _guard()
     if not access.is_workspace_admin():
         frappe.throw("You need workspace admin access for this.", frappe.PermissionError)
 
@@ -160,7 +155,6 @@ def _rule_dict(doc) -> dict:
 @frappe.whitelist()
 def get_notification_rules():
     _require_admin()
-    require_feature("notification_rules")
     names = frappe.get_all("BP Notification Rule", pluck="name", order_by="modified desc")
     return [_rule_dict(frappe.get_doc("BP Notification Rule", n)) for n in names]
 
@@ -169,7 +163,6 @@ def get_notification_rules():
 def create_notification_rule(rule_name, event, project=None, conditions=None,
                               recipients=None, channels=None, mute=0, enabled=1):
     _require_admin()
-    require_feature("notification_rules")
 
     doc = frappe.new_doc("BP Notification Rule")
     doc.rule_name = rule_name
@@ -191,7 +184,6 @@ def update_notification_rule(name, rule_name=None, event=None, project=None,
                               conditions=None, recipients=None, channels=None,
                               mute=None, enabled=None):
     _require_admin()
-    require_feature("notification_rules")
 
     doc = frappe.get_doc("BP Notification Rule", name)
     if rule_name is not None:
@@ -219,7 +211,6 @@ def update_notification_rule(name, rule_name=None, event=None, project=None,
 @frappe.whitelist()
 def delete_notification_rule(name):
     _require_admin()
-    require_feature("notification_rules")
     frappe.delete_doc("BP Notification Rule", name, ignore_permissions=True)
     frappe.db.commit()
     return {"ok": True}

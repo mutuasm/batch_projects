@@ -685,17 +685,6 @@
                   />
                   Account settings
                 </button>
-                <button
-                  class="sb-menu-item"
-                  @click="go('/workspace/pricing'); userMenuOpen = false"
-                >
-                  <CreditCard
-                    :size="14"
-                    :stroke-width="1.5"
-                    class="text-muted"
-                  />
-                  Billing &amp; plan
-                </button>
                 <div class="h-px bg-separator mx-1 my-1" />
                 <button class="sb-menu-item sb-menu-danger" @click="logout">
                   <LogOut :size="14" :stroke-width="1.5" />
@@ -889,7 +878,6 @@ import {
   ExternalLink,
   PinOff,
   Pin,
-  CreditCard,
 } from '@/icons/untitledui'
 import { ProjectAvatar } from '@/ui'
 

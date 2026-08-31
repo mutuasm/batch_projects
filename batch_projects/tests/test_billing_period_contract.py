@@ -17,7 +17,6 @@ class TestBillingPeriodContract(unittest.TestCase):
         with (
             patch.object(erp_link, "_check_permission"),
             patch("batch_projects.access.require_capability"),
-            patch.object(erp_link, "require_feature"),
             patch.object(erp_link.frappe, "get_doc") as get_doc,
             patch.object(erp_link.frappe.db, "sql") as sql,
             patch.object(
@@ -58,7 +57,6 @@ class TestBillingPeriodContract(unittest.TestCase):
         with (
             patch.object(erp_link, "_check_permission"),
             patch("batch_projects.access.require_capability"),
-            patch.object(erp_link, "require_feature"),
             patch.object(
                 erp_link.frappe,
                 "get_doc",

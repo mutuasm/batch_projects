@@ -17,12 +17,12 @@ Run with:
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects.api import custom_fields as cf
 
 
-class TestCustomFieldRoleOrdering(FrappeTestCase):
+class TestCustomFieldRoleOrdering(IntegrationTestCase):
     def test_edit_role_weaker_than_view_role_is_rejected(self):
         with self.assertRaises(frappe.ValidationError):
             cf._validate_field_payload("text", "Tasks", "Manager", "Viewer", None)
@@ -34,7 +34,7 @@ class TestCustomFieldRoleOrdering(FrappeTestCase):
         cf._validate_field_payload("text", "Tasks", "Viewer", "Admin", None)
 
 
-class TestSearchFieldLinkOptionsPermissionAwareness(FrappeTestCase):
+class TestSearchFieldLinkOptionsPermissionAwareness(IntegrationTestCase):
     def _field(self, **overrides):
         row = frappe._dict(
             name="CF-1", field_type="link", view_role="Viewer", edit_role="Member",
@@ -45,7 +45,6 @@ class TestSearchFieldLinkOptionsPermissionAwareness(FrappeTestCase):
 
     def test_user_with_no_doctype_read_permission_gets_empty_result_not_an_error(self):
         with (
-            patch.object(cf, "_guard"),
             patch("batch_projects.access.require"),
             patch("batch_projects.api.custom_fields._attached_fields", return_value=[(None, self._field())]),
             patch.object(frappe, "get_cached_doc", return_value=self._field()),
@@ -62,7 +61,6 @@ class TestSearchFieldLinkOptionsPermissionAwareness(FrappeTestCase):
 
     def test_user_with_doctype_read_permission_uses_permission_aware_get_list(self):
         with (
-            patch.object(cf, "_guard"),
             patch("batch_projects.access.require"),
             patch("batch_projects.api.custom_fields._attached_fields", return_value=[(None, self._field())]),
             patch.object(frappe, "get_cached_doc", return_value=self._field()),
@@ -80,7 +78,6 @@ class TestSearchFieldLinkOptionsPermissionAwareness(FrappeTestCase):
 
     def test_field_not_attached_to_project_is_rejected(self):
         with (
-            patch.object(cf, "_guard"),
             patch("batch_projects.access.require"),
             patch("batch_projects.api.custom_fields._attached_fields", return_value=[]),
             self.assertRaises(frappe.PermissionError),

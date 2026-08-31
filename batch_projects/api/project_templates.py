@@ -29,13 +29,9 @@ import frappe
 import json
 
 from batch_projects import access
-from batch_projects.entitlements import require_feature
 from batch_projects.api import custom_fields as _cf
 
 
-def _guard():
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
 
 def _require_system_user():
@@ -213,9 +209,7 @@ def _snapshot_tasks(project, project_start_date):
 def save_project_as_template(project, template_name, description="", category="",
                               icon=None, color=None,
                               include_tasks=1, include_automations=1, include_custom_fields=1):
-    _guard()
     _require_save_permission(project)
-    require_feature("templates")
 
     if not template_name or not template_name.strip():
         frappe.throw("Template name is required.")
@@ -308,8 +302,6 @@ def update_project_template(template, template_name=None, description=None,
                              category=None, icon=None, color=None):
     """Rename/describe only — snapshots are immutable. Refresh = re-save
     from the source project (a new template), not an edit of this one."""
-    _guard()
-    require_feature("templates")
     doc = frappe.get_doc("BP Project Template", template)
     if doc.source_project:
         _require_save_permission(doc.source_project)
@@ -334,8 +326,6 @@ def update_project_template(template, template_name=None, description=None,
 
 @frappe.whitelist()
 def delete_project_template(template):
-    _guard()
-    require_feature("templates")
     doc = frappe.get_doc("BP Project Template", template)
     if doc.source_project:
         _require_save_permission(doc.source_project)
@@ -357,7 +347,6 @@ def create_project_from_template(template, project_name, key, start_date=None, c
     # to check against) — the workspace-admin-or-project-admin gate applies
     # to the template CRUD above, not to consuming a template.
     _require_system_user()
-    require_feature("templates")
 
     from batch_projects.api.board import create_project, create_task, create_automation_rule, add_task_link
     from frappe.utils import add_days, getdate

@@ -10,7 +10,7 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks, workflow_security
 from batch_projects.api.board import create_project
@@ -84,7 +84,7 @@ def _add_member(project, user, role="Member"):
     )
 
 
-class TestWorkflowSecurityWiring(FrappeTestCase):
+class TestWorkflowSecurityWiring(IntegrationTestCase):
     """Prove the hook registrations exist AND point at real, callable
     functions — the original automation_security bug was these entries being
     entirely absent."""
@@ -120,7 +120,7 @@ class TestWorkflowSecurityWiring(FrappeTestCase):
         frappe.is_whitelisted(workflow_security.run_local_workflow_step)
 
 
-class TestWorkflowAuthority(FrappeTestCase):
+class TestWorkflowAuthority(IntegrationTestCase):
     """Direct unit coverage of validate_workflow_authority's real branches —
     mirrors automation_security.py's own TestRuleAuthority, since every check
     here is that module's real code, reused rather than reimplemented."""
@@ -241,7 +241,7 @@ class TestWorkflowAuthority(FrappeTestCase):
         workflow_security.validate_workflow_authority(_workflow(nodes=nodes))
 
 
-class TestWorkflowDispatch(FrappeTestCase):
+class TestWorkflowDispatch(IntegrationTestCase):
     """validate_workflow_dispatch is the runtime (not just save-time)
     boundary — legacy rows, direct DB tampering, and a stale/mismatched
     gateway payload must all be caught here."""
@@ -286,7 +286,7 @@ class TestWorkflowDispatch(FrappeTestCase):
         self.assertEqual(result["project"], "SOME-PROJECT")
 
 
-class TestWorkflowWrapperDelegation(FrappeTestCase):
+class TestWorkflowWrapperDelegation(IntegrationTestCase):
     """Prove run_workflow_node/run_local_workflow_step actually call
     validate_workflow_dispatch before delegating — not just that hooks.py
     names them correctly. Also prove node_type/config are never accepted as
@@ -417,7 +417,7 @@ class TestWorkflowWrapperDelegation(FrappeTestCase):
         self.assertNotIn("config", real_run.call_args.kwargs)
 
 
-class TestWorkflowNodeExecutionMatchesStoredDefinition(FrappeTestCase):
+class TestWorkflowNodeExecutionMatchesStoredDefinition(IntegrationTestCase):
     """The regression this whole PR exists for: a request that names a real
     workflow/node but tries to make it perform a DIFFERENT action than what
     is actually stored must either run the stored action or be rejected —
@@ -490,7 +490,7 @@ class TestWorkflowNodeExecutionMatchesStoredDefinition(FrappeTestCase):
         execute_mock.assert_not_called()
 
 
-class TestListWorkflowsScopeLeak(FrappeTestCase):
+class TestListWorkflowsScopeLeak(IntegrationTestCase):
     """Regression for the confirmed cross-project data leak: the original
     or_filters composition returned every scope="project" workflow instance-
     wide to any single-project viewer, not just this project's own rows."""
@@ -522,14 +522,13 @@ class TestListWorkflowsScopeLeak(FrappeTestCase):
         _delete_project("WFSCB")
 
     def test_project_viewer_sees_only_own_projects_workflows(self):
-        with patch("batch_projects.workflow_security._guard"):
-            rows = workflow_security.list_workflows(project=self.project_a)
+        rows = workflow_security.list_workflows(project=self.project_a)
         names = {r["name"] for r in rows}
         self.assertIn(self.wf_a, names)
         self.assertNotIn(self.wf_b, names)
 
 
-class TestWorkflowTestFixtureBinding(FrappeTestCase):
+class TestWorkflowTestFixtureBinding(IntegrationTestCase):
     """Regression for the confirmed confused-deputy execution: the original
     test_workflow fired the real gateway pipeline using an arbitrary task's
     own project in place of the workflow's, with no cross-check."""
@@ -567,7 +566,6 @@ class TestWorkflowTestFixtureBinding(FrappeTestCase):
 
     def test_cross_project_task_binding_is_rejected(self):
         with (
-            patch("batch_projects.workflow_security._guard"),
             patch("batch_projects.api.workflows.test_workflow") as original,
         ):
             with self.assertRaises(frappe.PermissionError):
@@ -576,7 +574,6 @@ class TestWorkflowTestFixtureBinding(FrappeTestCase):
 
     def test_same_project_task_binding_delegates(self):
         with (
-            patch("batch_projects.workflow_security._guard"),
             patch("batch_projects.api.workflows.test_workflow", return_value={"status": "fired"}) as original,
         ):
             result = workflow_security.test_workflow(self.workflow_a, task=self.task_in_a)
@@ -584,7 +581,7 @@ class TestWorkflowTestFixtureBinding(FrappeTestCase):
         original.assert_called_once()
 
 
-class TestWorkflowSaveIntegration(FrappeTestCase):
+class TestWorkflowSaveIntegration(IntegrationTestCase):
     """End-to-end: the doc_events hook must actually fire on a real save,
     for both structural authority (this hook) and caller authority
     (api/workflows.py's pre-existing _require_workflow_admin). Runs as a
@@ -623,7 +620,7 @@ class TestWorkflowSaveIntegration(FrappeTestCase):
         nodes = [_trigger_node(), {"id": "n2", "type": "action.change_status", "config": {"status": "Done"}}]
         edges = [{"id": "e1", "source": "n1", "target": "n2"}]
         frappe.set_user(self.admin_user)
-        with patch("batch_projects.api.workflows.require_feature"):
+        with patch("batch_projects.entitlements.require_feature"):
             result = save_workflow(
                 title="Valid project workflow", scope="project", project=self.project,
                 nodes=json.dumps(nodes), edges=json.dumps(edges),
@@ -636,7 +633,7 @@ class TestWorkflowSaveIntegration(FrappeTestCase):
         nodes = [_trigger_node(), {"id": "n2", "type": "action.update_erpnext_document", "config": {}}]
         edges = [{"id": "e1", "source": "n1", "target": "n2"}]
         frappe.set_user(self.admin_user)
-        with patch("batch_projects.api.workflows.require_feature"):
+        with patch("batch_projects.entitlements.require_feature"):
             with self.assertRaises(frappe.PermissionError):
                 save_workflow(
                     title="Should be rejected", scope="project", project=self.project,
@@ -649,7 +646,7 @@ class TestWorkflowSaveIntegration(FrappeTestCase):
         from batch_projects.api.workflows import save_workflow
 
         frappe.set_user(self.outsider)
-        with patch("batch_projects.api.workflows.require_feature"):
+        with patch("batch_projects.entitlements.require_feature"):
             with self.assertRaises(frappe.PermissionError):
                 save_workflow(
                     title="Should be rejected", scope="project", project=self.project,

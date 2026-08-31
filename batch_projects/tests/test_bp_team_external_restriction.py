@@ -11,7 +11,7 @@ Run with:
 """
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import permissions as perm
 
@@ -87,7 +87,7 @@ def _make_team(team_name, members=None):
     return doc.name
 
 
-class TestBpTeamExternalRestriction(FrappeTestCase):
+class TestBpTeamExternalRestriction(IntegrationTestCase):
     TEAM_A = "V117 Team Alpha"
     TEAM_B = "V117 Team Beta"
     WS_MEMBER = "v117-ws-member@example.com"

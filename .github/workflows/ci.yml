@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: ["version-*", "develop-15"]
+    branches: ["version-*", "develop-16"]
   push:
-    branches: ["version-*", "develop-15"]
+    branches: ["version-*", "develop-16"]
 
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
       - name: Compile-check every module (syntax/import errors only)
         run: python -m compileall -q batch_projects
 
@@ -38,13 +38,31 @@ jobs:
       SITE_NAME: test_site
       DB_ROOT_PASSWORD: root
       ADMIN_PASSWORD: admin
-      # Both declared frappe-dependencies in pyproject.toml are pinned to the
-      # v15 line; nothing else (hrms, payments, ...) is a dependency of this app.
-      FRAPPE_BRANCH: version-15
-      ERPNEXT_BRANCH: version-15
+      # Both declared frappe-dependencies in pyproject.toml (frappe, erpnext)
+      # are pinned to the v16 line. `payments` below is NOT an app dependency —
+      # it is a test-environment requirement only; see its comment.
+      FRAPPE_BRANCH: version-16
+      ERPNEXT_BRANCH: version-16
+      # ERPNext's `Payment Gateway Account` carries a Link to `Payment Gateway`,
+      # which lives in the separate `payments` app. Frappe's test-record
+      # dependency walker resolves that link and raises
+      # `DoesNotExistError: DocType Payment Gateway not found` when the app is
+      # absent — aborting the run *after* the tests themselves pass. ERPNext's
+      # own CI installs payments for exactly this reason (see erpnext
+      # .github/helper/install.sh and site_config_mariadb.json's install_apps),
+      # so this matches upstream's expected test environment rather than
+      # working around it. Nothing in this app imports payments.
+      PAYMENTS_BRANCH: version-16
 
     services:
       mariadb:
+        # Pinned to 10.6, which is Frappe v16's documented floor (see
+        # frappe/database/mariadb/setup_db.py — it warns below 10.6 and above
+        # 11.8). Do NOT bump to 11.x without also replacing the health-cmd
+        # below: MariaDB 11.x dropped the `mysqladmin` compatibility symlink in
+        # favour of `mariadb-admin`, so `mysqladmin ping` never succeeds, the
+        # container never reports healthy, and the job dies in "Initialize
+        # containers" with no test output at all. Tried and confirmed on 11.4.
         image: mariadb:10.6
         env:
           MYSQL_ROOT_PASSWORD: root
@@ -73,11 +91,11 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -120,6 +138,7 @@ jobs:
         env:
           CI: "Yes"
         run: |
+          bench get-app payments --branch "$PAYMENTS_BRANCH" --skip-assets
           bench get-app erpnext --branch "$ERPNEXT_BRANCH" --skip-assets
           bench get-app batch_projects "$GITHUB_WORKSPACE" --skip-assets
           bench new-site \
@@ -127,6 +146,7 @@ jobs:
             --admin-password "$ADMIN_PASSWORD" \
             --mariadb-user-host-login-scope=% \
             "$SITE_NAME"
+          bench --site "$SITE_NAME" install-app payments
           bench --site "$SITE_NAME" install-app erpnext
           bench --site "$SITE_NAME" install-app batch_projects
           # Explicit migrate: loads batch_projects fixtures (Custom Fields on
@@ -179,7 +199,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: yarn
           cache-dependency-path: frontend/yarn.lock
       - name: Install

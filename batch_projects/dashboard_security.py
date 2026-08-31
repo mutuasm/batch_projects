@@ -18,7 +18,6 @@ def _dashboard_module():
 
 def _guard():
     d = _dashboard_module()
-    d.require_feature("dashboards")
     d._require_system_user()
 
 

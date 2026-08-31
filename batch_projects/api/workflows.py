@@ -11,7 +11,6 @@ import json
 import frappe
 from frappe import _
 
-from batch_projects.entitlements import require_feature
 
 
 def _require_workflow_admin(scope, project):
@@ -43,7 +42,6 @@ def list_workflows(project=None):
     workspace-scope one. Mirrors the same bucket logic BP Automation Rule's
     `get_automation_rules` already uses — open to viewers on the
     project-scoped call, workspace admin only for the unscoped call."""
-    require_feature("automations")
     # This file was the one automation surface with no gateway check at all
     # (board.py's own helpers — _check_permission/_require_system_user —
     # bake it in; workflows.py's ad-hoc access.is_workspace_admin() checks on
@@ -52,8 +50,6 @@ def list_workflows(project=None):
     # a prior legitimate gateway request (current_tier()'s 3rd fallback).
     # This is the hard rejection — no valid gateway signature, no access,
     # regardless of what tier resolves.
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     from batch_projects import access
     if project:
         from batch_projects.api.board import _check_permission
@@ -78,7 +74,6 @@ def list_workflows(project=None):
 
 @frappe.whitelist()
 def get_workflow(name):
-    require_feature("automations")
     # This file was the one automation surface with no gateway check at all
     # (board.py's own helpers — _check_permission/_require_system_user —
     # bake it in; workflows.py's ad-hoc access.is_workspace_admin() checks on
@@ -87,8 +82,6 @@ def get_workflow(name):
     # a prior legitimate gateway request (current_tier()'s 3rd fallback).
     # This is the hard rejection — no valid gateway signature, no access,
     # regardless of what tier resolves.
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     if not frappe.db.exists("BP Workflow", name):
         frappe.throw(_("Workflow not found."))
     doc = frappe.get_doc("BP Workflow", name)
@@ -119,7 +112,6 @@ def save_workflow(name=None, title=None, scope="workspace", project=None,
     """Create (name=None) or update (name=<existing>) a workflow in one call
     — the canvas has no reason to distinguish create-vs-update client-side,
     the doctype's own autoname:hash already handles both."""
-    require_feature("automations")
     # This file was the one automation surface with no gateway check at all
     # (board.py's own helpers — _check_permission/_require_system_user —
     # bake it in; workflows.py's ad-hoc access.is_workspace_admin() checks on
@@ -128,8 +120,6 @@ def save_workflow(name=None, title=None, scope="workspace", project=None,
     # a prior legitimate gateway request (current_tier()'s 3rd fallback).
     # This is the hard rejection — no valid gateway signature, no access,
     # regardless of what tier resolves.
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     _require_workflow_admin(scope or "workspace", project)
 
     payload = {
@@ -193,7 +183,6 @@ def test_workflow(name, task=None):
     those trigger types are honestly under-served by "test with a task"
     and a real fixture (curl/console) remains the precise way to test them.
     """
-    require_feature("automations")
     # This file was the one automation surface with no gateway check at all
     # (board.py's own helpers — _check_permission/_require_system_user —
     # bake it in; workflows.py's ad-hoc access.is_workspace_admin() checks on
@@ -202,8 +191,6 @@ def test_workflow(name, task=None):
     # a prior legitimate gateway request (current_tier()'s 3rd fallback).
     # This is the hard rejection — no valid gateway signature, no access,
     # regardless of what tier resolves.
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     if not frappe.db.exists("BP Workflow", name):
         frappe.throw(_("Workflow not found."))
     doc = frappe.get_doc("BP Workflow", name)
@@ -277,7 +264,6 @@ def get_workflow_runs(workflow, since=None, limit=20):
     until runWorkflow generates it server-side, well after this call
     returns "fired"). Viewer-gated like get_workflow, not admin-only —
     anyone who can see the workflow can see its run history."""
-    require_feature("automations")
     # This file was the one automation surface with no gateway check at all
     # (board.py's own helpers — _check_permission/_require_system_user —
     # bake it in; workflows.py's ad-hoc access.is_workspace_admin() checks on
@@ -286,8 +272,6 @@ def get_workflow_runs(workflow, since=None, limit=20):
     # a prior legitimate gateway request (current_tier()'s 3rd fallback).
     # This is the hard rejection — no valid gateway signature, no access,
     # regardless of what tier resolves.
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     if not frappe.db.exists("BP Workflow", workflow):
         frappe.throw(_("Workflow not found."))
     doc = frappe.get_doc("BP Workflow", workflow)
@@ -349,7 +333,6 @@ def get_workflow_runs(workflow, since=None, limit=20):
 
 @frappe.whitelist()
 def delete_workflow(name):
-    require_feature("automations")
     # This file was the one automation surface with no gateway check at all
     # (board.py's own helpers — _check_permission/_require_system_user —
     # bake it in; workflows.py's ad-hoc access.is_workspace_admin() checks on
@@ -358,8 +341,6 @@ def delete_workflow(name):
     # a prior legitimate gateway request (current_tier()'s 3rd fallback).
     # This is the hard rejection — no valid gateway signature, no access,
     # regardless of what tier resolves.
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     if not frappe.db.exists("BP Workflow", name):
         frappe.throw(_("Workflow not found."))
     doc = frappe.get_doc("BP Workflow", name)
@@ -467,7 +448,6 @@ def _rule_trigger_to_node(rule_doc):
 
 @frappe.whitelist()
 def convert_rule_to_workflow(rule):
-    require_feature("automations")
     # This file was the one automation surface with no gateway check at all
     # (board.py's own helpers — _check_permission/_require_system_user —
     # bake it in; workflows.py's ad-hoc access.is_workspace_admin() checks on
@@ -476,8 +456,6 @@ def convert_rule_to_workflow(rule):
     # a prior legitimate gateway request (current_tier()'s 3rd fallback).
     # This is the hard rejection — no valid gateway signature, no access,
     # regardless of what tier resolves.
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     if not frappe.db.exists("BP Automation Rule", rule):
         frappe.throw(_("Rule not found."))
     rule_doc = frappe.get_doc("BP Automation Rule", rule)

@@ -13,12 +13,8 @@ from batch_projects.api.automation_data import _assert_gateway_service_caller
 
 
 def _require_webhook_admin():
-    from batch_projects.entitlements import require_feature
-    from batch_projects.gateway_guard import verify_gateway_request
     from batch_projects import access
 
-    require_feature("webhooks")
-    verify_gateway_request()
     if frappe.session.user != "Administrator" and not access.is_workspace_admin():
         frappe.throw("You need workspace admin access for this.", frappe.PermissionError)
 

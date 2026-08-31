@@ -54,15 +54,6 @@ def _dispatch_after_commit(event: str, payload: dict) -> None:
     events._evaluate_automations(event, enriched)
     events._queue_notifications(event, enriched)
 
-    try:
-        from batch_projects import bridge
-        bridge.publish_rebac_event(enriched)
-    except Exception:
-        frappe.log_error(
-            frappe.get_traceback(),
-            f"bp rebac {event} sync failed",
-        )
-
 
 def _schedule_lifecycle(event: str, doc, users: list[str]) -> None:
     payload = {

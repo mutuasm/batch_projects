@@ -7,13 +7,13 @@ thin delegation layer being added as a follow-up commit to PR #60 instead).
 
 from unittest.mock import patch
 
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks
 from batch_projects import task_lifecycle
 
 
-class TestLifecycleRoutes(FrappeTestCase):
+class TestLifecycleRoutes(IntegrationTestCase):
     def test_lifecycle_routes_are_overridden(self):
         overrides = hooks.override_whitelisted_methods
         self.assertEqual(
@@ -26,15 +26,14 @@ class TestLifecycleRoutes(FrappeTestCase):
         )
 
 
-class TestLifecycleDispatch(FrappeTestCase):
-    @patch("batch_projects.bridge.publish_rebac_event")
+class TestLifecycleDispatch(IntegrationTestCase):
     @patch("batch_projects.events._queue_notifications")
     @patch("batch_projects.events._evaluate_automations")
     @patch("batch_projects.events._broadcast")
     @patch("batch_projects.events._invalidate_cache")
     @patch("batch_projects.events._enrich", side_effect=lambda event, payload: {**payload, "event": event})
     def test_trash_restore_dispatch_runs_committed_event_pipeline(
-        self, enrich, invalidate, broadcast, automation, notifications, rebac
+        self, enrich, invalidate, broadcast, automation, notifications
     ):
         payload = {
             "project": "PROJ-1",
@@ -52,8 +51,7 @@ class TestLifecycleDispatch(FrappeTestCase):
         self.assertFalse(broadcast.call_args.kwargs["after_commit"])
         automation.assert_called_once()
         notifications.assert_called_once()
-        rebac.assert_called_once()
-        sent = rebac.call_args.args[0]
+        sent = broadcast.call_args.args[1]
         self.assertEqual(sent["event"], "task.trashed")
         self.assertEqual(sent["users"], ["alice@example.com"])
 

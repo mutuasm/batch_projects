@@ -3,12 +3,12 @@
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import notification_permissions as perms
 
 
-class TestNotificationRestCreation(FrappeTestCase):
+class TestNotificationRestCreation(IntegrationTestCase):
     @patch.object(perms, "_is_admin", return_value=False)
     def test_non_admin_cannot_create_local_notification_row(self, is_admin):
         doc = frappe._dict(

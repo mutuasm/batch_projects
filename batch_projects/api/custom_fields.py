@@ -53,9 +53,6 @@ _ROLES = {"Admin", "Manager", "Member", "Viewer"}
 _APPLIES_TO = {"Tasks", "Projects", "Both"}
 
 
-def _guard():
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
 
 def _parse_json(value, default):
@@ -173,7 +170,6 @@ def list_library_fields():
     """The workspace-wide grid — shared fields only. Project-owned fields
     are private by construction: they never appear here, only in their
     owning project's own Fields tab (get_project_fields)."""
-    _guard()
     _require_library_admin()
 
     names = frappe.get_all(
@@ -191,7 +187,6 @@ def list_attachable_fields():
     view_role/edit_role/marker detail are admin-gated. Excludes
     project-owned fields — those are private to their own project and are
     never offered for attaching onto a *different* one."""
-    _guard()
     if frappe.db.get_value("User", frappe.session.user, "user_type") != "System User":
         frappe.throw("Access denied.", frappe.PermissionError)
 
@@ -207,7 +202,6 @@ def list_attachable_fields():
 def create_field(field_label, field_type, description="", options=None,
                   applies_to="Tasks", view_role="Viewer", edit_role="Member",
                   conditional_rules=None, show_in_list=0, owner_project=None):
-    _guard()
     _require_field_admin(owner_project)
 
     options = _parse_json(options, [])
@@ -256,7 +250,6 @@ def update_field(name, field_label=None, description=None, field_type=None, opti
     # administer, or silently privatize a shared field out from under every
     # project attached to it. If a field needs a different owner, delete and
     # recreate it.
-    _guard()
     doc = frappe.get_doc("BP Custom Field", name)
     _require_field_admin(doc.owner_project)
 
@@ -307,7 +300,6 @@ def delete_field(name):
     doesn't assume it: it strips every BP Custom Field Project row that
     references this field, across all parents, before deleting the field
     doc itself. No orphan join rows either way."""
-    _guard()
     doc = frappe.get_doc("BP Custom Field", name)
     _require_field_admin(doc.owner_project)
 
@@ -330,7 +322,6 @@ def delete_field(name):
 
 @frappe.whitelist()
 def attach_field_to_project(project, custom_field, required=0):
-    _guard()
     access.require(project, "Admin")
 
     if not frappe.db.exists("BP Custom Field", custom_field):
@@ -360,7 +351,6 @@ def attach_field_to_project(project, custom_field, required=0):
 
 @frappe.whitelist()
 def detach_field_from_project(project, custom_field):
-    _guard()
     access.require(project, "Admin")
 
     proj = frappe.get_doc("BP Project", project)
@@ -412,7 +402,6 @@ def get_project_fields(project, scope="tasks"):
     instead of the old BP Project.custom_fields. `scope`: 'tasks' | 'projects'
     | 'all' — filters by applies_to. Fields the caller can't meet view_role
     for are stripped entirely (not just hidden client-side)."""
-    _guard()
     access.require(project, "Viewer")
 
     out = []
@@ -527,7 +516,6 @@ def search_field_link_options(project, field, txt=""):
     on the link_doctype at all gets [], not a PermissionError; a user who
     does hold it only ever sees rows/fields frappe.get_list would actually
     return them through the desk."""
-    _guard()
     access.require(project, "Viewer")
 
     # Binding check: `field` must actually be attached to (or owned by)

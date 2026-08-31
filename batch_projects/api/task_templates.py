@@ -10,12 +10,8 @@ locked state on write/apply actions, same pattern as automations.
 import frappe
 import json
 from batch_projects import access
-from batch_projects.entitlements import require_feature
 
 
-def _guard():
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
 
 def _parse_json(value, default):
@@ -48,7 +44,6 @@ def _template_dict(doc) -> dict:
 def list_task_templates(project):
     """All templates for a project. Free — the UI shows the locked state on
     write/apply actions, not on this list."""
-    _guard()
     access.require(project, "Viewer")
 
     names = frappe.get_all(
@@ -61,10 +56,8 @@ def list_task_templates(project):
 @frappe.whitelist()
 def save_task_as_template(task, template_name):
     """Snapshot an existing task (+ its subtasks) into a reusable template."""
-    _guard()
     task_doc = frappe.get_doc("BP Task", task)
     access.require(task_doc.project, "Manager")
-    require_feature("templates")
 
     tpl = frappe.new_doc("BP Task Template")
     tpl.update({
@@ -93,9 +86,7 @@ def save_task_as_template(task, template_name):
 @frappe.whitelist()
 def create_task_template(project, template_name, **fields):
     """Create a template from scratch (not derived from an existing task)."""
-    _guard()
     access.require(project, "Manager")
-    require_feature("templates")
 
     labels = fields.get("labels")
     if isinstance(labels, (list, dict)):
@@ -128,10 +119,8 @@ def create_task_template(project, template_name, **fields):
 
 @frappe.whitelist()
 def update_task_template(template, **fields):
-    _guard()
     tpl = frappe.get_doc("BP Task Template", template)
     access.require(tpl.project, "Manager")
-    require_feature("templates")
 
     if "template_name" in fields:
         tpl.template_name = fields["template_name"]
@@ -165,10 +154,8 @@ def update_task_template(template, **fields):
 
 @frappe.whitelist()
 def delete_task_template(template):
-    _guard()
     tpl = frappe.get_doc("BP Task Template", template)
     access.require(tpl.project, "Manager")
-    require_feature("templates")
     tpl.delete(ignore_permissions=True)
     frappe.db.commit()
     return {"ok": True}
@@ -180,10 +167,8 @@ def create_task_from_template(template, overrides=None):
     board.create_task so status defaulting, task_key generation, activity
     logging and events.emit(TASK_CREATED) all happen exactly once, the
     standard way — never reimplement task creation here."""
-    _guard()
     tpl = frappe.get_doc("BP Task Template", template)
     access.require(tpl.project, "Member")
-    require_feature("templates")
 
     overrides = _parse_json(overrides, {})
 

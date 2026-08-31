@@ -11,25 +11,25 @@ BatchProjects is maintained as production software for the ERPNext ecosystem. Co
 
 ## How changes land
 
-The v15 line uses an integration branch and a stable release branch:
+The v16 line uses an integration branch and a stable release branch:
 
-`short-lived branch -> develop-15 -> tested release PR -> version-15`
+`short-lived branch -> develop-16 -> tested release PR -> version-16`
 
-Normal product, engineering, dependency, and maintenance changes start from `develop-15`, land there through a pull request, and reach `version-15` only as part of an explicitly tested release candidate.
+Normal product, engineering, dependency, and maintenance changes start from `develop-16`, land there through a pull request, and reach `version-16` only as part of an explicitly tested release candidate.
 
 The expected flow is:
 
-1. Start from the current `develop-15` branch.
+1. Start from the current `develop-16` branch.
 2. Create a short-lived branch for one concern.
 3. Implement the smallest coherent change.
 4. Add or update regression coverage.
 5. Run the relevant checks locally.
-6. Open a pull request targeting `develop-15` and complete the full PR template.
+6. Open a pull request targeting `develop-16` and complete the full PR template.
 7. Address review and CI findings.
 8. Merge only after required checks and review are satisfied.
-9. Promote a tested release candidate from `develop-15` to `version-15` through a release PR; do not push accumulated development work directly to stable.
+9. Promote a tested release candidate from `develop-16` to `version-16` through a release PR; do not push accumulated development work directly to stable.
 
-A production hotfix is the exception: branch from `version-15`, merge the minimal verified fix back to `version-15` through a PR, then immediately forward-port the same fix to `develop-15` through its own reviewed PR. Stable-only fixes must not be allowed to drift indefinitely.
+A production hotfix is the exception: branch from `version-16`, merge the minimal verified fix back to `version-16` through a PR, then immediately forward-port the same fix to `develop-16` through its own reviewed PR. Stable-only fixes must not be allowed to drift indefinitely.
 
 Do not bundle unrelated cleanup into a product change. Smaller PRs are easier to reason about, safer to revert, and produce more useful repository history.
 
@@ -37,12 +37,12 @@ By submitting a PR you agree your contribution is licensed under this project's 
 
 ## Branch model
 
-- `version-15` is the stable/default v15 release line.
-- `develop-15` is the v15 integration line and the normal base/target for short-lived development branches.
+- `version-16` is the stable/default v16 release line.
+- `develop-16` is the v16 integration line and the normal base/target for short-lived development branches.
 - Short-lived branches describe one concern and are deleted after merge.
-- Stable promotion is a deliberate release operation from a tested `develop-15` release candidate, not an ad-hoc direct push.
+- Stable promotion is a deliberate release operation from a tested `develop-16` release candidate, not an ad-hoc direct push.
 - Hotfixes start from stable and must be forward-ported to development immediately after the stable fix lands.
-- Dependabot version-update pull requests target `develop-15`. GitHub security-update pull requests target the default branch (`version-15`); those fixes follow the hotfix/forward-port rule above.
+- Dependabot version-update pull requests target `develop-16`. GitHub security-update pull requests target the default branch (`version-16`); those fixes follow the hotfix/forward-port rule above.
 
 Short-lived implementation branches should describe intent, for example:
 
@@ -58,9 +58,12 @@ See [`deploy/README.md`](deploy/README.md) for BatchProjects/Gateway/ERPNext com
 
 BatchProjects is a Frappe app plus a Vue 3 / Vite SPA.
 
+Frappe/ERPNext v16 require **Python 3.14+** and **Node 24+**; the CI matrix
+pins exactly those.
+
 ```bash
 # Install the current stable release line inside an existing bench
-bench get-app https://github.com/BatchNepal/batch_projects --branch version-15
+bench get-app https://github.com/BatchNepal/batch_projects --branch version-16
 bench --site yoursite.local install-app batch_projects
 
 # Frontend

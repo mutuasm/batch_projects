@@ -24,56 +24,6 @@ import frappe
 import json
 
 
-# ─── ReBAC push-down ─────────────────────────────────────────────────────
-#
-# The gateway resolves each caller's allowed projects/tasks against its
-# embedded OpenFGA store and hands them down as headers on the proxied
-# request — X-BP-Allowed-Projects / X-BP-Allowed-Tasks — so Frappe's own SQL
-# still does the actual filtering/pagination (see internal/proxy's Director
-# in bp-gateway for the write side and why task IDs are assignee-only, not
-# the full viewer closure).
-
-def _rebac_scope(user):
-    """(allowed_projects, allowed_tasks) from the gateway's push-down
-    headers, or None if they don't apply and the caller should fall back to
-    the SQL-hook model below. Trusted ONLY when:
-
-      1. frappe.local._bp_gateway_verified is True — set EXCLUSIVELY by
-         gateway_guard.apply_gateway_identity() after a real HMAC check on
-         X-BP-Gateway-Sig (see that module's docstring: it runs on every
-         request via auth_hooks). A direct-to-Frappe request with no valid
-         gateway signature can never set this flag, so it can never reach
-         here with a spoofed header trusted.
-      2. `user` is the actual authenticated caller for this request — the
-         headers describe the CURRENT session only, never an arbitrary
-         other user some caller might pass in.
-
-    X-BP-Rebac-Active absent ⇒ the gateway isn't running ReBAC for this
-    deployment at all (dev without it, or a request that predates identity
-    resolution) — returns None, meaning "use the model below," unchanged
-    from before push-down existed. But once X-BP-Rebac-Active IS present,
-    it is ALWAYS authoritative, even on a parse failure (returns ([], []),
-    not None) — falling back to the SQL model on a malformed header would
-    mean a broken gateway response could make access MORE permissive than
-    intended, the opposite of fail-closed.
-    """
-    if not getattr(frappe.local, "_bp_gateway_verified", False):
-        return None
-    if user != frappe.session.user:
-        return None
-    if frappe.get_request_header("X-BP-Rebac-Active") != "1":
-        return None
-    try:
-        projects = json.loads(frappe.get_request_header("X-BP-Allowed-Projects") or "[]")
-        tasks = json.loads(frappe.get_request_header("X-BP-Allowed-Tasks") or "[]")
-        if not isinstance(projects, list) or not isinstance(tasks, list):
-            raise ValueError("non-list header payload")
-    except (TypeError, ValueError):
-        frappe.log_error("rebac: malformed X-BP-Allowed-* header, denying", "bp_rebac_scope")
-        return [], []
-    return projects, tasks
-
-
 def _is_admin(user: str) -> bool:
     return user == "Administrator" or "System Manager" in frappe.get_roles(user)
 
@@ -197,12 +147,6 @@ def bp_task_query_conditions(user=None):
     tasks or the project itself (this only ever ADDS specific task names,
     never widens the project-level clause).
 
-    When the gateway's ReBAC push-down is active for this request (see
-    _rebac_scope), its resolved lists are used DIRECTLY instead of
-    recomputing from BP Project Member/BP Task Assignee here — the gateway
-    is the authority once it's in the loop, this just turns its answer
-    into SQL.
-
     Also excludes trashed tasks (is_deleted=1) unconditionally — trash is
     recoverable, not gone, and the app's own get_all()-based endpoints
     exclude it too (see api/board.py's _task_filters). This hook is the
@@ -217,19 +161,6 @@ def bp_task_query_conditions(user=None):
     report escaping trash by accident."""
     user = user or frappe.session.user
     not_deleted = "`tabBP Task`.`is_deleted` = 0"
-
-    scope = _rebac_scope(user)
-    if scope is not None:
-        allowed_projects, allowed_tasks = scope
-        parts = []
-        if allowed_projects:
-            vals = ", ".join(frappe.db.escape(p) for p in allowed_projects)
-            parts.append(f"`tabBP Task`.`project` in ({vals})")
-        if allowed_tasks:
-            vals = ", ".join(frappe.db.escape(t) for t in allowed_tasks)
-            parts.append(f"`tabBP Task`.`name` in ({vals})")
-        scope_clause = " or ".join(parts) if parts else "1=0"
-        return f"({scope_clause}) and {not_deleted}"
 
     base = _project_in_clause("`tabBP Task`.`project`", user)
     if base == "":
@@ -279,14 +210,6 @@ def bp_dashboard_query_conditions(user=None):
 
 def bp_project_query_conditions(user=None):
     user = user or frappe.session.user
-
-    scope = _rebac_scope(user)
-    if scope is not None:
-        allowed_projects, _ = scope
-        if not allowed_projects:
-            return "1=0"
-        vals = ", ".join(frappe.db.escape(p) for p in allowed_projects)
-        return f"`tabBP Project`.`name` in ({vals})"
 
     accessible = get_accessible_projects(user)
     if accessible is None:

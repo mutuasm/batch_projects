@@ -306,26 +306,6 @@ export async function bridgeCall(path, { method = "GET", body, token } = {}) {
   return data;
 }
 
-// ─── BILLING (via gateway proxy → bp-license) ────────────────────────────────
-
-/** Fetch the plan catalog from bp-license via the gateway proxy. */
-export const getPlans = () => bridgeCall("billing/plans");
-
-/** Create a Dodo checkout session for the given tier and period.
- *  Returns { checkout_url, session_id }. Redirect the user to checkout_url. */
-export const createCheckoutSession = (tier, period = "monthly", discountCode) =>
-  bridgeCall("billing/checkout", {
-    method: "POST",
-    body: { tier, period, discount_code: discountCode || undefined },
-  });
-
-/** Get the authenticated user's active subscriptions. */
-export const getMySubscriptions = () => bridgeCall("billing/subscriptions");
-
-/** Get the Dodo customer portal URL (manage billing / payment methods). */
-export const getBillingPortal = () =>
-  bridgeCall("billing/portal", { method: "POST" });
-
 // ─── BRIDGE SESSION BOOTSTRAP ─────────────────────────────────────────────────
 // One post-login handshake with the bridge → entitlements + a gateway session JWT
 // the SPA then carries on every bridge call. Works in both topologies:

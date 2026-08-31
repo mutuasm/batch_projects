@@ -23,7 +23,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.email.doctype.email_queue.email_queue import EmailQueue as EmailQueueBase
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import push
 from batch_projects.secure_email_queue import BPEmailQueue
@@ -41,7 +41,7 @@ def _erpdesktop_agent_available():
     _erpdesktop_agent_available(),
     "requires the proprietary erpdesktop_agent app; not installed in public CI",
 )
-class TestDesktopPushWorkerRecheck(FrappeTestCase):
+class TestDesktopPushWorkerRecheck(IntegrationTestCase):
     def test_delivery_skipped_when_task_access_was_revoked_since_enqueue(self):
         with (
             patch("batch_projects.notification_delivery.can_receive_task_delivery", return_value=False) as can_deliver,
@@ -108,7 +108,7 @@ def _other_queue():
     return BPEmailQueue({"doctype": "Email Queue", "reference_doctype": "Sales Order", "reference_name": "SO-1"})
 
 
-class TestBPEmailQueueControllerResolution(FrappeTestCase):
+class TestBPEmailQueueControllerResolution(IntegrationTestCase):
     def test_email_queue_controller_is_overridden_to_bp_email_queue(self):
         overrides = frappe.get_hooks("override_doctype_class")
         self.assertIn("Email Queue", overrides)
@@ -117,7 +117,7 @@ class TestBPEmailQueueControllerResolution(FrappeTestCase):
         self.assertIs(get_controller("Email Queue"), BPEmailQueue)
 
 
-class TestBPEmailQueueSendBoundary(FrappeTestCase):
+class TestBPEmailQueueSendBoundary(IntegrationTestCase):
     def test_non_bp_task_mail_delegates_without_filtering(self):
         doc = _other_queue()
         with (
@@ -206,7 +206,7 @@ class TestBPEmailQueueSendBoundary(FrappeTestCase):
         log_error.assert_called_once()
 
 
-class TestBPEmailQueueValidateBoundary(FrappeTestCase):
+class TestBPEmailQueueValidateBoundary(IntegrationTestCase):
     def test_validate_drops_currently_unauthorized_pending_recipients(self):
         doc = _bp_task_queue([("stays@example.com", ""), ("never-had-access@example.com", "")])
 

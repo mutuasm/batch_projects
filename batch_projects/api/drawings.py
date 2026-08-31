@@ -26,17 +26,13 @@ just overwritten.
 import frappe
 
 from batch_projects import access
-from batch_projects.entitlements import require_workspace_feature, require_feature
+from batch_projects.entitlements import require_workspace_feature
 
 
-def _guard():
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
 
 def _require_gates():
     require_workspace_feature("draw")
-    require_feature("draw")
 
 
 def _drawing_list_dict(doc) -> dict:
@@ -59,7 +55,6 @@ def _drawing_full_dict(doc) -> dict:
 
 @frappe.whitelist()
 def list_drawings(project):
-    _guard()
     access.require(project, "Viewer")
     _require_gates()
 
@@ -72,7 +67,6 @@ def list_drawings(project):
 
 @frappe.whitelist()
 def get_drawing(name):
-    _guard()
     doc = frappe.get_doc("BP Drawing", name)
     access.require(doc.project, "Viewer")
     _require_gates()
@@ -81,7 +75,6 @@ def get_drawing(name):
 
 @frappe.whitelist()
 def create_drawing(project, title=""):
-    _guard()
     access.require(project, "Member")
     _require_gates()
 
@@ -100,7 +93,6 @@ def create_drawing(project, title=""):
 def save_drawing(name, scene_json=None, title=None, base_modified=None):
     """Autosave target. Never blocks on a stale base_modified (last-write-wins)
     — it just reports back whether this save clobbered a newer change."""
-    _guard()
     doc = frappe.get_doc("BP Drawing", name)
     access.require(doc.project, "Member")
     _require_gates()
@@ -122,7 +114,6 @@ def save_drawing(name, scene_json=None, title=None, base_modified=None):
 
 @frappe.whitelist()
 def delete_drawing(name):
-    _guard()
     doc = frappe.get_doc("BP Drawing", name)
     access.require(doc.project, "Manager")
     _require_gates()
@@ -159,7 +150,6 @@ def broadcast_drawing_change(name, elements_json):
     times a minute per active editor and writes nothing to the DB, so the
     full mutation pipeline (cache bust, automation rules, notifications,
     ReBAC) would be pure overhead at best and a false-trigger risk at worst."""
-    _guard()
     project = _drawing_project(name)
     access.require(project, "Member")
     _require_gates()
@@ -183,7 +173,6 @@ def broadcast_drawing_presence(name, leaving=False):
     that hasn't re-pinged in ~45s (mirrors composables/usePresence.js's
     existing workspace-wide online-dot pattern), so a tab that closes
     uncleanly self-heals without any backend cleanup job."""
-    _guard()
     project = _drawing_project(name)
     access.require(project, "Viewer")
     _require_gates()

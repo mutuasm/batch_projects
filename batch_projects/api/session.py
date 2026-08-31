@@ -75,8 +75,8 @@ def mint_bridge_token() -> dict:
     now = int(time.time())
     payload = {
         "sub": user,
-        # The gateway's identity handoff (gateway_guard.apply_gateway_identity)
-        # calls frappe.set_user() with this value, so it MUST be the actual
+        # Any consumer of this token re-scopes the session with
+        # frappe.set_user(), so it MUST be the actual
         # login identity (frappe.session.user) — NOT the User doctype's
         # separate, editable "email" profile field, which can (and, for the
         # special "Administrator" account on this bench, does) differ from

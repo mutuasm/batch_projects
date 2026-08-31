@@ -3,14 +3,14 @@
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import hooks
 from batch_projects import task_reads
 from batch_projects import task_validation
 
 
-class TestHookContracts(FrappeTestCase):
+class TestHookContracts(IntegrationTestCase):
     def test_task_detail_is_routed_through_permission_filter(self):
         self.assertEqual(
             hooks.override_whitelisted_methods["batch_projects.api.board.get_task"],
@@ -18,7 +18,7 @@ class TestHookContracts(FrappeTestCase):
         )
 
 
-class TestLinkedTaskReadSecurity(FrappeTestCase):
+class TestLinkedTaskReadSecurity(IntegrationTestCase):
     @patch("batch_projects.task_invariants._user_can_view_task")
     @patch.object(task_reads.frappe, "get_all")
     def test_inaccessible_cross_project_link_is_filtered(self, get_all, can_view):
@@ -71,7 +71,7 @@ class _Task:
         return getattr(self, key, None)
 
 
-class TestLinkCreationVisibility(FrappeTestCase):
+class TestLinkCreationVisibility(IntegrationTestCase):
     @patch("batch_projects.task_invariants._user_can_view_task", return_value=False)
     @patch.object(task_validation.frappe.db, "get_value")
     def test_new_link_to_inaccessible_task_is_rejected(self, get_value, can_view):

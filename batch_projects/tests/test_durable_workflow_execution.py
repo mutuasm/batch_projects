@@ -4,11 +4,11 @@ import json
 import threading
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import random_string
 
 
-class TestDurableWorkflowExecution(FrappeTestCase):
+class TestDurableWorkflowExecution(IntegrationTestCase):
     def setUp(self):
         self.workflow = None
         self.executions = []

@@ -11,18 +11,6 @@ app_license = "AGPL-3.0"
 # it exactly this way for the same reason.
 from . import __version__ as app_version
 
-# Minimum bp-gateway release this batch_projects version requires. Read by
-# the gateway itself at boot (via get_session_info) to refuse starting
-# against an incompatible batch_projects, and by the gateway installer to
-# resolve which gateway version to install/update to.
-#
-# 1.0.24 is the first release that routes Runtime V2 definition identities
-# (workflow:<name> / rule:<name>) to the matching Frappe stored-node endpoint
-# and forwards immutable workflow revision IDs. Older gateways make compiled
-# actions fail only after traffic arrives, so release ordering must fail at
-# compatibility startup instead.
-gateway_min_version = "1.0.24"
-
 add_to_apps_screen = [
     {
         "name": "batch_projects",
@@ -72,16 +60,27 @@ fixtures = [
     ]]},
 ]
 
+# BatchProjects replaces ERPNext's stock Project/Task list views — the SPA is
+# the default Projects experience, so every route into the desk lists
+# (workspace cards, awesome-bar, pasted /desk/project links) redirects into it.
+# `?desk=1` loads the stock list anyway; see the JS for the escape hatch.
+#
+# One file for both doctypes on purpose: Frappe only loads the files
+# registered for the doctype being rendered, so a shared helper cannot live in
+# a Project-only file and still exist on the Task list.
+doctype_list_js = {
+    "Project": "public/js/erpnext_projects_redirect.js",
+    "Task": "public/js/erpnext_projects_redirect.js",
+}
+
 # Hooks
 after_install = "batch_projects.setup.install.after_install"
 
-# Runs inside frappe.auth.validate_auth() on every request. Re-scopes
-# frappe.session.user from the gateway's service account (what actually
-# authenticated a cross-origin browser call — Frappe has no notion of the
-# gateway's own JWTs) to the real user the gateway's signed X-BP-Acting-User
-# header asserts. No-ops for same-origin traffic and anything not proxied by
-# the gateway. See gateway_guard.py's module docstring.
-auth_hooks = ["batch_projects.gateway_guard.apply_gateway_identity"]
+# ERPNext's `Projects` Workspace Sidebar is a standard record, so `bench
+# migrate` re-imports it from erpnext's JSON and reverts our override every
+# run. after_migrate fires after that sync, which is the only place the
+# re-point survives an upgrade. Idempotent — see the module docstring.
+after_migrate = ["batch_projects.setup.projects_module.override_erpnext_projects_module"]
 
 # Data-layer access control — closes the generic-REST bypass and enforces
 # project `visibility`. See batch_projects/permissions.py.
@@ -285,23 +284,10 @@ doc_events = {
         "on_cancel": "batch_projects.erp_triggers.on_any_doctype_event",
         "on_trash": "batch_projects.erp_triggers.on_any_doctype_event",
     },
-    # Seat-limit enforcement for BP Project Member and BP Team Member. Since
-    # both are child tables, `before_insert` only fires for a direct
-    # frappe.get_doc(...).insert() on the child doctype itself — it does NOT
-    # fire when a row is added by appending to the parent's child table and
-    # saving the parent (the generic REST/ORM insert path for child rows), so
-    # this hook cannot be the only gate on either doctype. BP Project's own
-    # validate() carries the authority check for BP Project Member role
-    # mutations (see bp_project.py:_validate_members_mutation_authority) —
-    # BP Team Member has no equivalent yet.
     "BP Project Member": {
-        "before_insert": "batch_projects.entitlements.before_member_insert",
         # Revoked membership must not leave a stale watcher routing task
         # notifications to a user with no other access edge to that task.
         "after_delete": "batch_projects.membership_invariants.after_project_member_delete",
-    },
-    "BP Team Member": {
-        "before_insert": "batch_projects.entitlements.before_member_insert",
     },
     # Re-scopes rule authority at save time — a rule is a durable capability,
     # and the gateway's own service-account identity only proves who called

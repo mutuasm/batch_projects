@@ -16,7 +16,6 @@ import frappe
 from frappe import _
 from frappe.utils import get_url
 
-from batch_projects.entitlements import require_feature
 
 
 OAUTH_PROVIDERS = {
@@ -80,8 +79,6 @@ def get_oauth_authorize_url(provider, owner_project=None):
     """Generate the OAuth authorize URL for a provider.
     The client_id and redirect_uri are read from site_config or environment.
     """
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
     _require_credential_admin()
 
     if provider not in OAUTH_PROVIDERS:
@@ -199,7 +196,6 @@ def list_credentials(project=None):
     a user choose one; the Go engine is the only reader of the actual secret
     (via a separate, not-yet-built gateway-facing lookup, same "Frappe holds
     the write, Go does the call" boundary as everything else in the automation engine)."""
-    require_feature("automations")
     _require_credential_admin()
     filters = {}
     if project:
@@ -215,7 +211,6 @@ def list_credentials(project=None):
 
 @frappe.whitelist()
 def create_credential(label, credential_type="bearer_token", value=None, extra_headers=None, owner_project=None):
-    require_feature("automations")
     _require_credential_admin()
     doc = frappe.get_doc({
         "doctype": "BP Integration Credential",
@@ -232,7 +227,6 @@ def create_credential(label, credential_type="bearer_token", value=None, extra_h
 
 @frappe.whitelist()
 def delete_credential(name):
-    require_feature("automations")
     _require_credential_admin()
     if not frappe.db.exists("BP Integration Credential", name):
         frappe.throw(_("Credential not found."))

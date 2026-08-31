@@ -8,12 +8,12 @@ PR, not this one.
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import notification_delivery as delivery
 
 
-class TestNotificationDeliveryPolicy(FrappeTestCase):
+class TestNotificationDeliveryPolicy(IntegrationTestCase):
     @patch.object(delivery, "resolve_system_user", return_value="user@example.com")
     @patch.object(delivery.frappe.db, "get_value")
     @patch("batch_projects.task_invariants._user_can_view_task", return_value=True)
@@ -85,7 +85,7 @@ class TestNotificationDeliveryPolicy(FrappeTestCase):
         )
 
 
-class TestIsNotificationVisible(FrappeTestCase):
+class TestIsNotificationVisible(IntegrationTestCase):
     """Direct coverage of the shared 3-branch decision — notification_permissions
     and notification_reads both delegate here rather than each carrying their
     own copy."""

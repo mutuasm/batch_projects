@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import task_invariants as inv
 
@@ -23,7 +23,7 @@ class _OldTask:
         self.project = project
 
 
-class TestAssignmentAuthority(FrappeTestCase):
+class TestAssignmentAuthority(IntegrationTestCase):
     @patch("batch_projects.access.has_at_least")
     @patch("batch_projects.access.is_instance_admin", return_value=False)
     def test_member_may_assign_existing_project_viewer(self, _is_admin, has_at_least):
@@ -62,7 +62,7 @@ class TestAssignmentAuthority(FrappeTestCase):
             )
 
 
-class TestProjectMoveAuthority(FrappeTestCase):
+class TestProjectMoveAuthority(IntegrationTestCase):
     @patch("batch_projects.access.require")
     def test_cross_project_move_requires_manager_on_both_projects(self, require):
         inv._validate_project_move_authority(_Task("P-B"), _OldTask("P-A"))

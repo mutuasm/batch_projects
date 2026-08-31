@@ -115,7 +115,6 @@ def _dispatch_without_builtin_notification(event_name: str, payload: dict):
     events._invalidate_cache(event_name, payload)
     events._broadcast(event_name, payload)
     events._evaluate_automations(event_name, payload)
-    events._sync_rebac(event_name, payload)
 
 
 def after_task_insert(doc, method=None):

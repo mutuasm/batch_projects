@@ -19,7 +19,7 @@ import uuid
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import random_string
 
 
@@ -27,7 +27,7 @@ from frappe.utils import random_string
     os.environ.get("BP_LIVE_GATEWAY_SMOKE"),
     "requires a live bp-gateway; not run in standard CI. Set BP_LIVE_GATEWAY_SMOKE=1 to run.",
 )
-class TestDurableWorkflowLiveSmoke(FrappeTestCase):
+class TestDurableWorkflowLiveSmoke(IntegrationTestCase):
     def _wait_for(self, predicate, message, timeout=30):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:

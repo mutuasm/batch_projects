@@ -11,7 +11,7 @@ Run with:
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import analytics
 
@@ -35,7 +35,7 @@ def _sprint_doc(**overrides):
     return row
 
 
-class TestBurndownAndBurnupExcludeDeletedTasks(FrappeTestCase):
+class TestBurndownAndBurnupExcludeDeletedTasks(IntegrationTestCase):
     def test_burndown_query_excludes_deleted_tasks(self):
         with (
             patch.object(frappe, "get_doc", return_value=_sprint_doc()),
@@ -66,7 +66,7 @@ class TestBurndownAndBurnupExcludeDeletedTasks(FrappeTestCase):
         self.assertEqual(_task_call_filters(get_all).get("is_deleted"), 0)
 
 
-class TestVelocityAndCycleTimeExcludeDeletedTasks(FrappeTestCase):
+class TestVelocityAndCycleTimeExcludeDeletedTasks(IntegrationTestCase):
     def test_velocity_query_excludes_deleted_tasks(self):
         with (
             patch.object(analytics, "_get_done_statuses", return_value=set()),

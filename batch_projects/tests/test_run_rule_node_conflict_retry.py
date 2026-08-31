@@ -27,11 +27,11 @@ from unittest.mock import patch
 
 import frappe
 from frappe.exceptions import TimestampMismatchError
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import random_string
 
 
-class TestRunRuleNodeConflictRetry(FrappeTestCase):
+class TestRunRuleNodeConflictRetry(IntegrationTestCase):
     def setUp(self):
         self._project = None
         self._task = None

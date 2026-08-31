@@ -14,7 +14,6 @@ import frappe
 
 from batch_projects.api.board import _check_permission, _as_bool, _parse_json, _resolve_scope, _require_system_user
 from batch_projects.api.erp_link import _doctype_field_rows
-from batch_projects.entitlements import require_feature
 
 
 def _dashboard_out(doc, with_layout=False):
@@ -43,7 +42,6 @@ def _dashboard_out(doc, with_layout=False):
 def list_dashboards():
     """List dashboards visible to the user: their own private ones, plus
     workspace-visible ones on projects they can access (or workspace-wide)."""
-    require_feature("dashboards")
     from batch_projects.permissions import get_accessible_projects
     accessible = get_accessible_projects()
     rows = frappe.get_all(
@@ -73,7 +71,6 @@ def list_dashboards():
 
 @frappe.whitelist()
 def get_dashboard(dashboard):
-    require_feature("dashboards")
     doc = frappe.get_doc("BP Dashboard", dashboard)
     if doc.visibility == "private" and doc.owner != frappe.session.user:
         frappe.throw("Not permitted", frappe.PermissionError)
@@ -108,7 +105,6 @@ def save_dashboard(dashboard_name=None, project=None, milestone=None, period="la
                     icon="LayoutDashboard", color=None, layout=None, dashboard=None,
                     starred=None, pinned=None, visibility=None):
     """Create (dashboard omitted) or update (dashboard given) a BP Dashboard."""
-    require_feature("dashboards")
     project = project or None
     if project:
         _check_permission(project, "BP Member")
@@ -146,7 +142,6 @@ def save_dashboard(dashboard_name=None, project=None, milestone=None, period="la
 
 @frappe.whitelist()
 def delete_dashboard(dashboard):
-    require_feature("dashboards")
     doc = frappe.get_doc("BP Dashboard", dashboard)
     _assert_dashboard_write_authority(doc)
     frappe.delete_doc("BP Dashboard", dashboard)
@@ -297,7 +292,6 @@ def get_column_widget_data(scope="all", filter_by=None, filter_value=None, statu
     pass one down to unassigned tasks only, an easy trap for any new caller
     (and one this endpoint's own tests walked straight into).
     """
-    require_feature("dashboards")
     # NOT `filters` — that name is this function's own parameter (the visual
     # filter-builder rows). Unpacking into it silently discarded every
     # builder filter the caller sent.
@@ -795,7 +789,6 @@ def get_widget_source_doctypes():
     only ones actually installed/whitelisted, never an open-ended dropdown
     of every doctype on the site, and only ones THIS user can really read
     (so the picker never advertises a source whose data would then 403)."""
-    require_feature("dashboards")
     _require_system_user()
     return [
         {"doctype": dt, "label": e["label"], "icon": e["icon"],
@@ -813,7 +806,6 @@ def get_widget_source_fields(doctype):
     frappe.get_meta()-based introspection instead of a second copy, plus the
     synthetic fields below that have no docfield but are genuinely
     filterable/groupable (see _synthetic_fields)."""
-    require_feature("dashboards")
     _require_system_user()
     _widget_source_entry(doctype)
     rows = _readable_field_rows(doctype) + _synthetic_fields(doctype)
@@ -842,7 +834,6 @@ def get_widget_source_field_options(doctype, fieldname, query=None, limit=20):
     non-tenant master data (User, Territory, Lead Source, Industry, CRM
     Lead/Deal Status, ...), same posture as board.py's search_erp_documents
     treating Lead/Opportunity as unscoped cross-project master data."""
-    require_feature("dashboards")
     _require_system_user()
     _widget_source_entry(doctype)
     field = next((f for f in _readable_field_rows(doctype) if f["fieldname"] == fieldname), None)
@@ -883,7 +874,6 @@ def get_multi_source_count(sources, scope=None):
     like get_widget_data's {total, ...} so WidgetView.vue's Metric
     template (`widget.data.total`) needs no special case for this mode.
     """
-    require_feature("dashboards")
     _require_system_user()
     sources = _parse_json(sources, []) if isinstance(sources, str) else (sources or [])
     if not sources:
@@ -991,7 +981,6 @@ def get_date_presets():
     """The relative-date vocabulary the filter builder offers. Served from
     the backend so the token list can never drift from what
     _date_preset_filter() actually knows how to resolve."""
-    require_feature("dashboards")
     _require_system_user()
     return [
         {"value": "overdue", "label": "Overdue"},
@@ -1107,7 +1096,6 @@ def get_doctype_group_data(doctype, group_by, filters=None, scope=None):
     """Doctype-agnostic group/aggregate engine for the 'kanban' widget's
     auto-columns and chart widgets sourced from a non-Task doctype —
     parametrized sibling of board.py's Task-only get_widget_data."""
-    require_feature("dashboards")
     _require_system_user()
     entry = _widget_source_entry(doctype)
 
@@ -1151,7 +1139,6 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
     date_field: one Date/Datetime fieldname shown right-aligned, or None —
     None IS the "hide date" option (one control, nothing to get out of sync).
     """
-    require_feature("dashboards")
     if doctype == "BP Task":
         frappe.throw("Use get_column_widget_data for BP Task — this endpoint is for other doctypes.")
     _require_system_user()
@@ -1322,7 +1309,6 @@ def update_widget_source_field(doctype, name, fieldname, value):
     list to maintain), docstatus!=1 guard, skip-if-unchanged, then
     doc.set()+save(). Frappe's own doctype validate() hooks ARE the "proper
     validation" here — no new state machine, same posture as that function."""
-    require_feature("dashboards")
     if doctype == "BP Task":
         frappe.throw("Use update_task_status/move_task for BP Task.")
     _widget_source_entry(doctype)
@@ -1354,7 +1340,6 @@ def get_widget_source_doc_quickview(doctype, name):
     require_feature('dashboards'), NOT the money/profitability entitlement
     chain get_erp_doc_summary (erp_link.py) uses — this isn't financial
     data and that function's scope is deliberately narrower than this."""
-    require_feature("dashboards")
     if doctype == "BP Task":
         frappe.throw("Use the Task detail panel for BP Task records.")
     _widget_source_entry(doctype)

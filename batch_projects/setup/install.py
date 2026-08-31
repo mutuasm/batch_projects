@@ -26,6 +26,13 @@ def after_install():
     ensure_timer_activity_type()
     ensure_bp_task_accounting_dimension()
 
+    # Make BatchProjects the default Projects module immediately on install,
+    # rather than only after the first `bench migrate`. Same idempotent call
+    # the after_migrate hook makes.
+    from batch_projects.setup.projects_module import override_erpnext_projects_module
+
+    override_erpnext_projects_module()
+
     frappe.db.commit()
     print("batch_projects installed successfully!")
 

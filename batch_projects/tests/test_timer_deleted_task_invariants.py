@@ -16,13 +16,13 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import now_datetime
 
 from batch_projects.api import timers
 
 
-class TestStartAndLogRejectDeletedTasks(FrappeTestCase):
+class TestStartAndLogRejectDeletedTasks(IntegrationTestCase):
     def test_start_timer_rejects_a_deleted_task(self):
         task_doc = frappe._dict(project="PROJ-A", is_deleted=1)
         with (
@@ -46,7 +46,7 @@ class TestStartAndLogRejectDeletedTasks(FrappeTestCase):
             timers.log_time("TASK-1", 1.0)
 
 
-class TestStopCapsDurationAtDeletion(FrappeTestCase):
+class TestStopCapsDurationAtDeletion(IntegrationTestCase):
     def test_legacy_timer_on_a_deleted_task_is_capped_at_deleted_on(self):
         started_at = now_datetime() - timedelta(hours=5)
         deleted_on = now_datetime() - timedelta(hours=2)
@@ -148,7 +148,7 @@ class TestStopCapsDurationAtDeletion(FrappeTestCase):
         append_log.assert_not_called()
 
 
-class TestGetActiveTimerSelfHealsTrashedTask(FrappeTestCase):
+class TestGetActiveTimerSelfHealsTrashedTask(IntegrationTestCase):
     def test_lookup_resolves_and_clears_a_timer_on_a_trashed_task(self):
         row = frappe._dict(name="AT-1", task="TASK-1", started_at=now_datetime())
         with (
@@ -168,7 +168,7 @@ class TestGetActiveTimerSelfHealsTrashedTask(FrappeTestCase):
         stop.assert_called_once_with("AT-1")
 
 
-class TestTimerRemindersSkipDeletedTasks(FrappeTestCase):
+class TestTimerRemindersSkipDeletedTasks(IntegrationTestCase):
     def test_no_reminder_is_sent_for_a_deleted_tasks_timer(self):
         rows = [frappe._dict(name="AT-1", user="u@example.com", task="TASK-1", started_at=now_datetime() - timedelta(hours=9))]
         with (

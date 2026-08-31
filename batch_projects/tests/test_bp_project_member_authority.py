@@ -10,7 +10,7 @@
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from batch_projects import access
 
@@ -19,7 +19,7 @@ def _members(*pairs):
     return [frappe._dict(user=u, role=r) for u, r in pairs]
 
 
-class TestBPProjectMemberMutationAuthority(FrappeTestCase):
+class TestBPProjectMemberMutationAuthority(IntegrationTestCase):
     def _doc(self, members, is_new, name="TEST-PROJ-AUTH"):
         doc = frappe.get_doc({"doctype": "BP Project"})
         doc.set("__islocal", 1 if is_new else None)
@@ -66,13 +66,7 @@ class TestBPProjectMemberMutationAuthority(FrappeTestCase):
 
     def test_new_project_instance_admin_bypasses_shape_check(self):
         doc = self._doc(_members(("anyone@example.com", "Admin")), is_new=True)
-        # Seat accounting is a separate licensing concern from the shape/
-        # authority check this test covers — the parent validator now runs
-        # incremental seat validation on member additions (P1-6), so stub it.
-        with (
-            patch.object(access, "is_instance_admin", return_value=True),
-            patch("batch_projects.entitlements.assert_seats_available"),
-        ):
+        with patch.object(access, "is_instance_admin", return_value=True):
             doc._validate_members_mutation_authority()  # must not raise
 
     # ── existing project: any member-table change requires Admin ────────

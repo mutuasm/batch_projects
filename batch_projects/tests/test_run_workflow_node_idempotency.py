@@ -15,11 +15,11 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import random_string
 
 
-class TestRunWorkflowNodeIdempotency(FrappeTestCase):
+class TestRunWorkflowNodeIdempotency(IntegrationTestCase):
     def setUp(self):
         self._project = None
         self._task = None
