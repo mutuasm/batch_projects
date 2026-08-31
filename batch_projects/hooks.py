@@ -60,17 +60,20 @@ fixtures = [
     ]]},
 ]
 
-# BatchProjects replaces ERPNext's stock Project/Task list views — the SPA is
-# the default Projects experience, so every route into the desk lists
-# (workspace cards, awesome-bar, pasted /desk/project links) redirects into it.
-# `?desk=1` loads the stock list anyway; see the JS for the escape hatch.
+# Jira-shaped navigation on ERPNext's own Project/Task, using v16 desk views.
+# The SPA is being retired, so the desk lists are the real destination now
+# rather than something to redirect out of — the earlier redirect into
+# /workspace is gone.
 #
-# One file for both doctypes on purpose: Frappe only loads the files
-# registered for the doctype being rendered, so a shared helper cannot live in
-# a Project-only file and still exist on the Task list.
+# Opening a project goes to its task board (Jira's default), with the form one
+# click away. Hierarchy needs nothing built: Task is `is_tree: 1` on
+# parent_task, so the native Tree view already renders epics -> stories ->
+# sub-tasks level by level.
+doctype_js = {
+    "Project": "public/js/project_jira.js",
+}
 doctype_list_js = {
-    "Project": "public/js/erpnext_projects_redirect.js",
-    "Task": "public/js/erpnext_projects_redirect.js",
+    "Project": "public/js/project_jira.js",
 }
 
 # Hooks
@@ -80,7 +83,10 @@ after_install = "batch_projects.setup.install.after_install"
 # migrate` re-imports it from erpnext's JSON and reverts our override every
 # run. after_migrate fires after that sync, which is the only place the
 # re-point survives an upgrade. Idempotent — see the module docstring.
-after_migrate = ["batch_projects.setup.projects_module.override_erpnext_projects_module"]
+after_migrate = [
+    "batch_projects.setup.projects_module.override_erpnext_projects_module",
+    "batch_projects.setup.jira_workspace.setup_jira_workspace",
+]
 
 # Data-layer access control — closes the generic-REST bypass and enforces
 # project `visibility`. See batch_projects/permissions.py.

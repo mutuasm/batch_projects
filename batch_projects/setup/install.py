@@ -39,6 +39,11 @@ def after_install():
 
     create_native_project_fields()
 
+    # Stage 2: the Jira-shaped board and issue types, on native Task.
+    from batch_projects.setup.jira_workspace import setup_jira_workspace
+
+    setup_jira_workspace()
+
     frappe.db.commit()
     print("batch_projects installed successfully!")
 
