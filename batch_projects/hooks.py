@@ -255,6 +255,11 @@ override_whitelisted_methods = {
 # class docstring) — every other Email Queue doc on the site behaves exactly
 # as Frappe core ships it.
 override_doctype_class = {
+    # Native Task carrying BP field aliases, so `doc.title` keeps working on a
+    # native Task without editing thousands of field references. Task has no
+    # other override; Project deliberately gets none — HRMS owns that one. See
+    # native_controllers.py.
+    "Task": "batch_projects.native_controllers.BPTask",
     "Email Queue": "batch_projects.secure_email_queue.BPEmailQueue",
 }
 
