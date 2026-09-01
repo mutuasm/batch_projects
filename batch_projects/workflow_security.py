@@ -28,6 +28,8 @@ import json
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 _FIELDS = [
     "name", "title", "scope", "project", "is_active",
@@ -257,7 +259,7 @@ def test_workflow(name, task=None):
 
     if task:
         task_row = frappe.db.get_value(
-            "BP Task", task, ["name", "project", "is_deleted"], as_dict=True
+            TASK(), task, ["name", "project", "is_deleted"], as_dict=True
         )
         if not task_row or task_row.is_deleted:
             # Do not reveal whether a guessed task exists in Trash/elsewhere.

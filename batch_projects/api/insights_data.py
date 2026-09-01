@@ -42,6 +42,8 @@ import math
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 def _assert_service_caller():
     """Only the bridge service account (System Manager / Administrator) may
@@ -410,7 +412,7 @@ def _visible_money_projects(user: str) -> list[dict]:
         return []
 
     projects = frappe.get_all(
-        "BP Project",
+        PROJECT(),
         filters=proj_filters,
         fields=["name", "project_name", "key", "project_color", "theme",
                 "project_type", "hourly_rate", "budget_amount", "retainer_hours",
@@ -541,7 +543,7 @@ def get_money_inputs(project, from_date, to_date, user):
     access.require_capability(project, "view_money", user=user)
     require_workspace_feature("money_tab")
 
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     if not doc.erpnext_project:
         return {"linked": False, "project": project}
 
@@ -694,7 +696,7 @@ def get_money_inputs(project, from_date, to_date, user):
         if r.get("task")
     }
     tasks = frappe.get_all(
-        "BP Task", filters={"name": ["in", list(referenced)]},
+        TASK(), filters={"name": ["in", list(referenced)]},
         fields=["name", "task_key", "title"],
     ) if referenced else []
 
@@ -763,7 +765,7 @@ def get_portfolio_inputs(user):
         return {"projects": [], "tasks": [], "milestones": [], "money_visible": {}}
 
     projects = frappe.get_all(
-        "BP Project",
+        PROJECT(),
         filters=proj_filters,
         fields=["name", "project_name", "key", "project_color", "theme",
                 "health_override", "client", "lead", "start_date",
@@ -791,7 +793,7 @@ def get_portfolio_inputs(user):
             p[f] = str(p[f]) if p.get(f) else None
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters=_task_filters({"project": ["in", pnames]}),
         fields=["project", "status", "due_date"],
     )

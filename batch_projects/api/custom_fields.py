@@ -24,6 +24,8 @@ modified here) — nothing new invented:
 """
 
 import frappe
+
+from batch_projects.doctypes import PROJECT, TASK
 import json
 
 from batch_projects import access
@@ -231,7 +233,7 @@ def create_field(field_label, field_type, description="", options=None,
         # join rows and doesn't care who owns the definition, so this is the
         # only special-case needed to make a private field behave identically
         # to an attached shared one everywhere else.
-        proj = frappe.get_doc("BP Project", owner_project)
+        proj = frappe.get_doc(PROJECT(), owner_project)
         proj.append("custom_field_links", {"custom_field": doc.name, "required": 0})
         proj.flags.ignore_permissions = True
         proj.save()
@@ -334,7 +336,7 @@ def attach_field_to_project(project, custom_field, required=0):
         # leak onto a second project through a direct call to this endpoint.
         frappe.throw("This field is private to another project and can't be attached here.")
 
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
     row = next((r for r in (proj.custom_field_links or []) if r.custom_field == custom_field), None)
     if row:
         row.required = 1 if int(required or 0) else 0
@@ -353,7 +355,7 @@ def attach_field_to_project(project, custom_field, required=0):
 def detach_field_from_project(project, custom_field):
     access.require(project, "Admin")
 
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
     kept = [r for r in (proj.custom_field_links or []) if r.custom_field != custom_field]
     if len(kept) == len(proj.custom_field_links or []):
         return {"ok": True}  # wasn't attached — no-op
@@ -429,7 +431,7 @@ def _attached_fields(project, scope="tasks"):
     read-time concern for get_project_fields; validation/edit-role checks
     need to see every attached field regardless of who's asking)."""
     wanted = _SCOPE_MAP.get(scope, _SCOPE_MAP["tasks"])
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
     out = []
     for link in (proj.custom_field_links or []):
         cf = frappe.get_cached_doc("BP Custom Field", link.custom_field)

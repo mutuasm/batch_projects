@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects import task_invariants
 
 _FLAG = "bp_default_assignee_materialized"
@@ -34,7 +36,7 @@ def before_task_insert(doc, method=None):
     if task_invariants._assignee_users(doc):
         return
 
-    default_user = frappe.db.get_value("BP Project", doc.project, "default_assignee")
+    default_user = frappe.db.get_value(PROJECT(), doc.project, "default_assignee")
     if not default_user:
         return
 
@@ -61,7 +63,7 @@ def validate_materialized_default(doc) -> bool:
     if not doc.is_new():
         frappe.throw("Default-assignee materialization is insert-only.", frappe.ValidationError)
 
-    configured = frappe.db.get_value("BP Project", doc.project, "default_assignee")
+    configured = frappe.db.get_value(PROJECT(), doc.project, "default_assignee")
     users = task_invariants._assignee_users(doc)
     if configured != default_user or users != [default_user]:
         frappe.throw(
@@ -125,7 +127,7 @@ def after_task_insert(doc, method=None):
         return task_invariants.after_task_insert(doc, method=method)
 
     users = task_invariants._assignee_users(doc)
-    configured = frappe.db.get_value("BP Project", doc.project, "default_assignee")
+    configured = frappe.db.get_value(PROJECT(), doc.project, "default_assignee")
     if configured != default_user or users != [default_user]:
         # Validation should make this unreachable; fail closed rather than emit
         # a permission edge for a state we did not prove.

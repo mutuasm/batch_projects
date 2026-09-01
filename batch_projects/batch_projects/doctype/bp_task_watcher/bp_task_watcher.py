@@ -4,6 +4,8 @@
 import frappe
 from frappe.model.document import Document
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 class BPTaskWatcher(Document):
     def validate(self):
@@ -17,7 +19,7 @@ class BPTaskWatcher(Document):
         from batch_projects.task_invariants import _user_can_view_task
 
         task = frappe.db.get_value(
-            "BP Task", self.task, ["project", "is_deleted"], as_dict=True
+            TASK(), self.task, ["project", "is_deleted"], as_dict=True
         )
         if not task or task.is_deleted:
             frappe.throw("Cannot watch a task that does not exist or is in trash.")

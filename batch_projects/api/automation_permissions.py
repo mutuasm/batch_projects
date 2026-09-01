@@ -7,6 +7,8 @@ never reads or mutates runtime execution state.
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects.api.automation_data import _assert_gateway_service_caller
 
 
@@ -44,7 +46,7 @@ def _allowed(definition, mode, user):
         return bool(access.is_workspace_admin(user))
 
     project = definition["project"]
-    if not project or not frappe.db.exists("BP Project", project):
+    if not project or not frappe.db.exists(PROJECT(), project):
         return False
     if mode == "admin":
         return bool(access.has_at_least(project, "Admin", user))

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 # Mirrors task_invariants.py's _user_row / _user_can_view_task (not yet landed
 # on develop-15 as of this PR — inlined here rather than taking on a
@@ -57,7 +59,7 @@ def prune_stale_watchers(project: str, users=None) -> list[str]:
     removed = []
     for row in rows:
         task = frappe.db.get_value(
-            "BP Task", row.task, ["name", "project", "is_deleted"], as_dict=True
+            TASK(), row.task, ["name", "project", "is_deleted"], as_dict=True
         )
         if not task:
             frappe.db.delete("BP Task Watcher", {"name": row.name})

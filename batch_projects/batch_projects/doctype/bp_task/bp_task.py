@@ -1,6 +1,8 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import now_datetime
+
+from batch_projects.doctypes import PROJECT, TASK
 import json
 
 # ─── RECURRENCE ────────────────────────────────────────────────────────────
@@ -63,7 +65,7 @@ class BPTask(Document):
         # Auto-generate issue key
         project = None
         if not self.task_key:
-            project = frappe.get_doc("BP Project", self.project)
+            project = frappe.get_doc(PROJECT(), self.project)
             counter = project.get_next_issue_number()
             self.task_key = f"{project.key}-{counter}"
 
@@ -77,7 +79,7 @@ class BPTask(Document):
         # project has triage_enabled AND no explicit status was given.
         if not self.status:
             if project is None:
-                project = frappe.get_doc("BP Project", self.project)
+                project = frappe.get_doc(PROJECT(), self.project)
             if project.get("triage_enabled"):
                 self.needs_triage = 1
 
@@ -86,7 +88,7 @@ class BPTask(Document):
         # status replacement).
         if not self.status:
             if project is None:
-                project = frappe.get_doc("BP Project", self.project)
+                project = frappe.get_doc(PROJECT(), self.project)
             states = project.get_workflow_states()
             if states:
                 self.status = states[0]["name"]
@@ -151,7 +153,7 @@ class BPTask(Document):
         old = self.get_doc_before_save()
         if old and old.status == self.status:
             return  # not changing — skip
-        project = frappe.get_doc("BP Project", self.project)
+        project = frappe.get_doc(PROJECT(), self.project)
         valid = project.get_status_names()
         if valid and self.status not in valid:
             frappe.throw(
@@ -171,7 +173,7 @@ class BPTask(Document):
     def _validate_task_type(self):
         if not self.task_type:
             return
-        project = frappe.get_doc("BP Project", self.project)
+        project = frappe.get_doc(PROJECT(), self.project)
         valid = [t["name"] for t in project.get_issue_types()]
         if valid and self.task_type not in valid:
             frappe.msgprint(
@@ -186,7 +188,7 @@ class BPTask(Document):
         if not old:
             return
 
-        project = frappe.get_doc("BP Project", self.project)
+        project = frappe.get_doc(PROJECT(), self.project)
 
         if old.status != self.status:
             started = project.get_started_statuses()
@@ -664,10 +666,10 @@ def spawn_recurring_occurrence(task_name):
     from batch_projects import bridge
     from frappe.utils import getdate, nowdate, add_to_date
 
-    if not frappe.db.exists("BP Task", task_name):
+    if not frappe.db.exists(TASK(), task_name):
         return ("Skipped", "template task no longer exists")
 
-    template = frappe.get_doc("BP Task", task_name)
+    template = frappe.get_doc(TASK(), task_name)
 
     if not template.is_recurring:
         return ("Skipped", "recurrence turned off")
@@ -680,8 +682,8 @@ def spawn_recurring_occurrence(task_name):
                     bridge.cancel_scheduled_job(template.bridge_job_id)
             except Exception:
                 pass
-            frappe.db.set_value("BP Task", task_name, "is_recurring", 0, update_modified=False)
-            frappe.db.set_value("BP Task", task_name, "bridge_job_id", None, update_modified=False)
+            frappe.db.set_value(TASK(), task_name, "is_recurring", 0, update_modified=False)
+            frappe.db.set_value(TASK(), task_name, "bridge_job_id", None, update_modified=False)
             return ("Skipped", "recurrence end date passed")
 
     interval = _RECURRENCE_INTERVAL_SECONDS.get(template.recurrence_frequency or "", 86400)

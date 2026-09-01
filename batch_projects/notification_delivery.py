@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 def resolve_system_user(identity: str | None) -> str | None:
     """Resolve a Frappe User name or email address to an enabled System User.
@@ -106,7 +108,7 @@ def can_receive_task_delivery(
         return False
 
     row = frappe.db.get_value(
-        "BP Task", task, ["name", "project", "is_deleted"], as_dict=True
+        TASK(), task, ["name", "project", "is_deleted"], as_dict=True
     )
     if not row or not row.project:
         return False

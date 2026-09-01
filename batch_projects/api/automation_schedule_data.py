@@ -10,6 +10,8 @@ import re
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects.api.automation_data import (
     _assert_gateway_service_caller,
     _duplicate_result,
@@ -77,9 +79,9 @@ def get_project_facts(projects=None, **_):
     projects = _clean_projects(projects if isinstance(projects, list) else _safe_json(projects, []))
     out = []
     for project in projects:
-        if not frappe.db.exists("BP Project", project):
+        if not frappe.db.exists(PROJECT(), project):
             continue
-        doc = frappe.get_cached_doc("BP Project", project)
+        doc = frappe.get_cached_doc(PROJECT(), project)
         out.append({
             "project": project,
             "workflow_states": [
@@ -95,7 +97,7 @@ def get_project_facts(projects=None, **_):
 def list_projects(**_):
     """Return raw project identities. Scope/filter decisions happen in Go."""
     _assert_gateway_service_caller()
-    return frappe.get_all("BP Project", pluck="name", order_by="name asc", limit_page_length=_MAX_RESULT_ROWS)
+    return frappe.get_all(PROJECT(), pluck="name", order_by="name asc", limit_page_length=_MAX_RESULT_ROWS)
 
 
 @frappe.whitelist()
@@ -111,7 +113,7 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
         return []
     if not isinstance(field, str) or not _FIELD_RE.match(field):
         frappe.throw("Invalid BP Task date field")
-    meta = frappe.get_meta("BP Task")
+    meta = frappe.get_meta(TASK())
     df = meta.get_field(field)
     if not df or df.fieldtype not in ("Date", "Datetime"):
         frappe.throw("Requested BP Task field is not Date/Datetime")
@@ -124,7 +126,7 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
     if df.fieldtype == "Datetime":
         value_filter = ["between", [f"{target} 00:00:00", f"{target} 23:59:59"]]
     names = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"project": ["in", projects], field: value_filter, "is_deleted": 0},
         pluck="name",
         order_by="name asc",
@@ -132,7 +134,7 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
     )
     out = []
     for name in names:
-        task = frappe.get_doc("BP Task", name)
+        task = frappe.get_doc(TASK(), name)
         out.append({
             "name": task.name,
             "task_key": task.task_key,
@@ -146,9 +148,9 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
 def get_recurring_task(task=None, **_):
     """Return the current recurrence template row without interpreting it."""
     _assert_gateway_service_caller()
-    if not task or not frappe.db.exists("BP Task", task):
+    if not task or not frappe.db.exists(TASK(), task):
         return None
-    doc = frappe.get_doc("BP Task", task)
+    doc = frappe.get_doc(TASK(), task)
     # A trashed or no-longer-recurring task must not serve as a recurrence
     # template — the scheduler would otherwise admit new occurrences from it.
     if doc.is_deleted or not doc.is_recurring:
@@ -227,9 +229,9 @@ def apply_task_occurrence(mutation=None, **_):
     for required in ("project", "title", "priority", "task_type", "status", "recurrence_source"):
         if not mutation.get(required):
             frappe.throw(f"Recurring occurrence requires final {required}")
-    if not frappe.db.exists("BP Project", mutation["project"]):
+    if not frappe.db.exists(PROJECT(), mutation["project"]):
         frappe.throw("Recurring occurrence project does not exist")
-    if not frappe.db.exists("BP Task", mutation["recurrence_source"]):
+    if not frappe.db.exists(TASK(), mutation["recurrence_source"]):
         frappe.throw("Recurring occurrence source task does not exist")
 
     duplicate = _duplicate_result(key)

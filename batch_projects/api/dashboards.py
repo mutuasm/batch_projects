@@ -12,6 +12,8 @@ see internal/license/license.go.
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects.api.board import _check_permission, _as_bool, _parse_json, _resolve_scope, _require_system_user
 from batch_projects.api.erp_link import _doctype_field_rows
 
@@ -304,12 +306,12 @@ def get_column_widget_data(scope="all", filter_by=None, filter_value=None, statu
     else:
         from batch_projects.permissions import get_accessible_projects
         acc = get_accessible_projects()
-        scope_projects = frappe.get_all("BP Project", pluck="name") if acc is None else list(acc)
+        scope_projects = frappe.get_all(PROJECT(), pluck="name") if acc is None else list(acc)
 
     completed = set()
     for pn in scope_projects:
         try:
-            completed |= set(frappe.get_cached_doc("BP Project", pn).get_completed_statuses())
+            completed |= set(frappe.get_cached_doc(PROJECT(), pn).get_completed_statuses())
         except Exception:
             pass
 
@@ -360,7 +362,7 @@ def get_column_widget_data(scope="all", filter_by=None, filter_value=None, statu
     fields += _extra_fields("BP Task", extra_fields, exclude=fields)
     if group_by and group_by not in ("date", "none", "assignee") and group_by not in fields:
         fields += _extra_fields("BP Task", [group_by], exclude=fields)
-    tasks = frappe.get_all("BP Task", filters=db_filters, fields=fields, order_by="due_date asc", limit_page_length=500)
+    tasks = frappe.get_all(TASK(), filters=db_filters, fields=fields, order_by="due_date asc", limit_page_length=500)
 
     pinfo = {}
     type_colors = {}  # project -> {task_type: color}
@@ -368,7 +370,7 @@ def get_column_widget_data(scope="all", filter_by=None, filter_value=None, statu
         p = t["project"]
         if p not in pinfo:
             row = frappe.db.get_value(
-                "BP Project", p, ["project_name", "key", "theme"], as_dict=True
+                PROJECT(), p, ["project_name", "key", "theme"], as_dict=True
             ) or {}
             pinfo[p] = {
                 "project_name": row.get("project_name") or p,
@@ -390,7 +392,7 @@ def get_column_widget_data(scope="all", filter_by=None, filter_value=None, statu
         # store.taskTypeMap lookup would silently mismatch tasks that aren't
         # in whatever project happens to be loaded elsewhere in the app).
         if p not in type_colors:
-            raw = frappe.db.get_value("BP Project", p, "issue_types")
+            raw = frappe.db.get_value(PROJECT(), p, "issue_types")
             type_colors[p] = {it.get("name"): it.get("color") for it in _parse_json(raw, []) if it.get("name")}
         t["type_color"] = type_colors[p].get(t["task_type"]) or "var(--accent)"
 
@@ -475,7 +477,7 @@ def _group_tasks_by_field(tasks, group_by, scope_projects):
         # Progress, Done" is the only ordering that reads as a pipeline.
         for pn in scope_projects:
             try:
-                for s in _parse_json(frappe.db.get_value("BP Project", pn, "workflow_states"), []):
+                for s in _parse_json(frappe.db.get_value(PROJECT(), pn, "workflow_states"), []):
                     if s.get("name") and s["name"] not in order_hint:
                         order_hint.append(s["name"])
             except Exception:

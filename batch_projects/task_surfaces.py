@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 @frappe.whitelist()
 def complete_sprint(sprint, move_incomplete_to=None):
@@ -20,7 +22,7 @@ def complete_sprint(sprint, move_incomplete_to=None):
     if done_statuses:
         filters["status"] = ["not in", done_statuses]
 
-    incomplete = frappe.get_all("BP Task", filters=filters, fields=["name"])
+    incomplete = frappe.get_all(TASK(), filters=filters, fields=["name"])
     target = move_incomplete_to or None
 
     if incomplete:
@@ -30,7 +32,7 @@ def complete_sprint(sprint, move_incomplete_to=None):
             if target_project != doc.project:
                 frappe.throw("Target sprint does not belong to the same project.")
         for name in names:
-            task = frappe.get_doc("BP Task", name)
+            task = frappe.get_doc(TASK(), name)
             task.sprint = target
             task.save(ignore_permissions=True)
 
@@ -42,7 +44,7 @@ def complete_sprint(sprint, move_incomplete_to=None):
     from batch_projects.events import emit, SPRINT_COMPLETED
     completed_count = (
         frappe.db.count(
-            "BP Task",
+            TASK(),
             {
                 "sprint": sprint,
                 "project": doc.project,

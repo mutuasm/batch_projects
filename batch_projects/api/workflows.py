@@ -11,6 +11,8 @@ import json
 import frappe
 from frappe import _
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 
 def _require_workflow_admin(scope, project):
@@ -218,14 +220,14 @@ def test_workflow(name, task=None):
 
     task_doc = None
     if task:
-        if not frappe.db.exists("BP Task", task):
+        if not frappe.db.exists(TASK(), task):
             frappe.throw(_("Task not found."))
-        task_doc = frappe.get_doc("BP Task", task)
+        task_doc = frappe.get_doc(TASK(), task)
     else:
         filters = {"project": doc.project} if doc.scope == "project" and doc.project else {}
-        recent = frappe.db.get_value("BP Task", filters, "name", order_by="modified desc")
+        recent = frappe.db.get_value(TASK(), filters, "name", order_by="modified desc")
         if recent:
-            task_doc = frappe.get_doc("BP Task", recent)
+            task_doc = frappe.get_doc(TASK(), recent)
 
     payload = {"project": doc.project}
     if task_doc:

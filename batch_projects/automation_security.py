@@ -13,6 +13,8 @@ import re
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects import access
 from batch_projects.notification_delivery import (
     can_receive_project_delivery,
@@ -71,7 +73,7 @@ def _validate_project_filter(doc) -> None:
             frappe.ValidationError,
         )
     for project in values:
-        if project and not frappe.db.exists("BP Project", project):
+        if project and not frappe.db.exists(PROJECT(), project):
             frappe.throw("Automation project filter contains an unknown project.")
 
 
@@ -170,7 +172,7 @@ def validate_dispatch(rule_doc, payload: dict) -> dict:
     task_row = None
     if task:
         task_row = frappe.db.get_value(
-            "BP Task", task, ["name", "project", "is_deleted"], as_dict=True
+            TASK(), task, ["name", "project", "is_deleted"], as_dict=True
         )
         # Physical deletion events may legitimately outlive the row. In that
         # case the event's project is still the only resource authority. A live
@@ -188,7 +190,7 @@ def validate_dispatch(rule_doc, payload: dict) -> dict:
         allowed = _rule_projects(rule_doc)
         if allowed and project not in allowed:
             frappe.throw("Automation event is outside the workspace rule filter.", frappe.PermissionError)
-        if project and not frappe.db.exists("BP Project", project):
+        if project and not frappe.db.exists(PROJECT(), project):
             frappe.throw("Automation event references an unknown project.", frappe.PermissionError)
     else:
         frappe.throw("Automation rule has an invalid scope.", frappe.PermissionError)

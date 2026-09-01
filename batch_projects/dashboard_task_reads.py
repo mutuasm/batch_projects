@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects import access
 from batch_projects.task_reads import _INTERNAL_TASK_FIELDS, _MONEY_TASK_FIELDS
 
@@ -18,7 +20,7 @@ def _scope_projects(scope="all") -> list[str]:
     from batch_projects.permissions import get_accessible_projects
     accessible = get_accessible_projects()
     if accessible is None:
-        return frappe.get_all("BP Project", pluck="name")
+        return frappe.get_all(PROJECT(), pluck="name")
     return list(accessible)
 
 
@@ -104,7 +106,7 @@ def get_column_widget_data(
 
     live = set(
         frappe.get_all(
-            "BP Task",
+            TASK(),
             filters={"name": ["in", sorted(names)], "is_deleted": 0},
             pluck="name",
         )
@@ -112,7 +114,7 @@ def get_column_widget_data(
     visible_names = set()
     from batch_projects.task_invariants import _user_can_view_task
     for row in frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"name": ["in", sorted(live)]},
         fields=["name", "project"],
     ):

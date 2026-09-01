@@ -21,6 +21,8 @@ and `has_permission` (single-document gate).
 """
 
 import frappe
+
+from batch_projects.doctypes import PROJECT, TASK
 import json
 
 
@@ -54,14 +56,14 @@ def get_accessible_projects(user: str | None = None):
 
     # workspace (and legacy blank) visibility = open to all System Users
     workspace = set(frappe.get_all(
-        "BP Project", filters={"visibility": ["in", ["workspace", "", None]]},
+        PROJECT(), filters={"visibility": ["in", ["workspace", "", None]]},
         pluck="name"))
 
     team_projects = set()
     user_teams = frappe.get_all("BP Team Member", filters={"user": user}, pluck="parent")
     if user_teams:
         team_projects = set(frappe.get_all(
-            "BP Project",
+            PROJECT(),
             filters={"visibility": "team", "team": ["in", list(user_teams)]},
             pluck="name"))
 

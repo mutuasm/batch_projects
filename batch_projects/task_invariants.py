@@ -12,6 +12,8 @@ import re
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 _RESERVED_ASSIGNEES = {"Guest", "Administrator"}
 _MENTION_RE = re.compile(r"@\[[^\]]+\]\(([^)]+)\)")
@@ -220,7 +222,7 @@ def _validate_task_type(doc, old=None) -> None:
         return
     if old and old.project == doc.project and old.task_type == doc.task_type:
         return
-    project = frappe.get_cached_doc("BP Project", doc.project)
+    project = frappe.get_cached_doc(PROJECT(), doc.project)
     valid = {row.get("name") for row in (project.get_issue_types() or []) if row.get("name")}
     if valid and doc.task_type not in valid:
         frappe.throw(
@@ -300,7 +302,7 @@ def _validate_project_relations(doc, old=None) -> None:
         if doc.name and doc.parent_task == doc.name:
             frappe.throw("A task cannot be its own parent.", frappe.ValidationError)
         parent = frappe.db.get_value(
-            "BP Task", doc.parent_task, ["project", "parent_task", "is_deleted"], as_dict=True
+            TASK(), doc.parent_task, ["project", "parent_task", "is_deleted"], as_dict=True
         )
         if not parent or parent.is_deleted:
             frappe.throw("Parent task does not exist or is in trash.", frappe.ValidationError)
@@ -315,7 +317,7 @@ def _validate_project_relations(doc, old=None) -> None:
             if ancestor == doc.name or ancestor in seen:
                 frappe.throw("Task hierarchy cannot contain a cycle.", frappe.ValidationError)
             seen.add(ancestor)
-            ancestor = frappe.db.get_value("BP Task", ancestor, "parent_task")
+            ancestor = frappe.db.get_value(TASK(), ancestor, "parent_task")
         else:
             frappe.throw("Task hierarchy is too deep to validate safely.", frappe.ValidationError)
 
@@ -329,7 +331,7 @@ def _validate_project_relations(doc, old=None) -> None:
             if sprint.project != doc.project:
                 frappe.throw("Sprint belongs to another project.", frappe.ValidationError)
         else:
-            project_team = frappe.db.get_value("BP Project", doc.project, "team")
+            project_team = frappe.db.get_value(PROJECT(), doc.project, "team")
             if not sprint.team or sprint.team != project_team:
                 frappe.throw(
                     "Team sprint does not belong to this project's team.",
@@ -379,7 +381,7 @@ def _validate_task_links(doc, old=None) -> None:
             frappe.throw("A task cannot be linked to itself.", frappe.ValidationError)
 
         target = frappe.db.get_value(
-            "BP Task", row.linked_task, ["name", "project", "is_deleted"], as_dict=True
+            TASK(), row.linked_task, ["name", "project", "is_deleted"], as_dict=True
         )
         if not target or target.is_deleted:
             frappe.throw(
@@ -434,7 +436,7 @@ def validate_comment_mentions(activity) -> None:
     """Validate newly-added @mentions in a BP Activity Comment."""
     if activity.action_type != "Comment" or not activity.task:
         return
-    task = frappe.db.get_value("BP Task", activity.task, ["project", "name"], as_dict=True)
+    task = frappe.db.get_value(TASK(), activity.task, ["project", "name"], as_dict=True)
     if not task:
         frappe.throw("Comment task no longer exists.", frappe.ValidationError)
     old = activity.get_doc_before_save() if hasattr(activity, "get_doc_before_save") else None

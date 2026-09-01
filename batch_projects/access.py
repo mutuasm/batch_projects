@@ -35,6 +35,8 @@ generic REST API, reports, list views and the SPA all enforce the same rule.
 """
 
 import frappe
+
+from batch_projects.doctypes import PROJECT, TASK
 import json
 
 # Canonical project roles (must match BP Project Member.role select options).
@@ -158,7 +160,7 @@ def _resolve_effective_role(project: str, user: str) -> str | None:
 
     # 2) fall back to visibility-granted access (read-only)
     visibility, team = frappe.db.get_value(
-        "BP Project", project, ["visibility", "team"]
+        PROJECT(), project, ["visibility", "team"]
     ) or (None, None)
 
     if visibility in (None, "", "workspace"):
@@ -189,7 +191,7 @@ def is_project_archived(project: str) -> bool:
         cache = {}
         frappe.local._bp_archived = cache
     if project not in cache:
-        cache[project] = frappe.db.get_value("BP Project", project, "status") == "Archived"
+        cache[project] = frappe.db.get_value(PROJECT(), project, "status") == "Archived"
     return cache[project]
 
 

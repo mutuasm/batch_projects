@@ -18,6 +18,8 @@ Design language — quiet, typographic, product-notification style
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects import desk_urls
 
 
@@ -710,7 +712,7 @@ def _stat_panel(stats: list) -> str:
 # ─── DIGEST EMAIL ─────────────────────────────────────────────────────────────
 
 def _task_row(t: dict, base_url: str) -> str:
-    key   = frappe.db.get_value("BP Project", t.get("project"), "key") if t.get("project") else ""
+    key   = frappe.db.get_value(PROJECT(), t.get("project"), "key") if t.get("project") else ""
     from batch_projects import desk_urls
 
     turl  = desk_urls.task_url(t.get("project"), t.get("task_key"))

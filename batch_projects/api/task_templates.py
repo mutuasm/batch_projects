@@ -8,6 +8,8 @@ locked state on write/apply actions, same pattern as automations.
 """
 
 import frappe
+
+from batch_projects.doctypes import PROJECT, TASK
 import json
 from batch_projects import access
 
@@ -56,7 +58,7 @@ def list_task_templates(project):
 @frappe.whitelist()
 def save_task_as_template(task, template_name):
     """Snapshot an existing task (+ its subtasks) into a reusable template."""
-    task_doc = frappe.get_doc("BP Task", task)
+    task_doc = frappe.get_doc(TASK(), task)
     access.require(task_doc.project, "Manager")
 
     tpl = frappe.new_doc("BP Task Template")
@@ -72,7 +74,7 @@ def save_task_as_template(task, template_name):
     })
 
     subtasks = frappe.get_all(
-        "BP Task", filters={"parent_task": task}, fields=["title", "task_type"],
+        TASK(), filters={"parent_task": task}, fields=["title", "task_type"],
         order_by="board_order asc, creation asc",
     )
     for st in subtasks:

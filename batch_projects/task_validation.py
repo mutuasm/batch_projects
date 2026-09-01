@@ -11,6 +11,8 @@ import json
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects import task_invariants
 
 
@@ -36,7 +38,7 @@ def validate_task_labels(doc, old=None) -> None:
         frappe.throw("A task cannot contain the same label more than once.", frappe.ValidationError)
     if not labels:
         return
-    raw_catalog = frappe.db.get_value("BP Project", doc.project, "labels") or "[]"
+    raw_catalog = frappe.db.get_value(PROJECT(), doc.project, "labels") or "[]"
     try:
         catalog = json.loads(raw_catalog) if isinstance(raw_catalog, str) else raw_catalog
     except (TypeError, ValueError):
@@ -72,7 +74,7 @@ def validate_link_visibility(doc, old=None) -> None:
         if not changed or not row.linked_task:
             continue
         target = frappe.db.get_value(
-            "BP Task", row.linked_task, ["name", "project", "is_deleted"], as_dict=True
+            TASK(), row.linked_task, ["name", "project", "is_deleted"], as_dict=True
         )
         if not target or target.is_deleted:
             continue
@@ -102,7 +104,7 @@ def _force_dependency_override(doc) -> bool:
 def validate_completion_dependencies(doc, old=None) -> None:
     if not old or old.project != doc.project or old.status == doc.status:
         return
-    project = frappe.get_cached_doc("BP Project", doc.project)
+    project = frappe.get_cached_doc(PROJECT(), doc.project)
     completed = set(project.get_completed_statuses())
     if doc.status not in completed or old.status in completed or _force_dependency_override(doc):
         return
@@ -115,7 +117,7 @@ def validate_completion_dependencies(doc, old=None) -> None:
         return
     blockers = [
         row for row in frappe.get_all(
-            "BP Task",
+            TASK(),
             filters={"name": ["in", list(blocker_names)], "is_deleted": 0},
             fields=["name", "task_key", "title", "status"],
         )
@@ -209,8 +211,8 @@ def require_live_task(name: str, for_update: bool = False):
             frappe.throw("Task not found.", frappe.DoesNotExistError)
         if row[0].is_deleted:
             frappe.throw("Task has been trashed.", frappe.PermissionError)
-        return frappe.get_doc("BP Task", name)
-    doc = frappe.get_doc("BP Task", name)
+        return frappe.get_doc(TASK(), name)
+    doc = frappe.get_doc(TASK(), name)
     if doc.is_deleted:
         frappe.throw("Task has been trashed.", frappe.PermissionError)
     return doc

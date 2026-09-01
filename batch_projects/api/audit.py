@@ -17,6 +17,8 @@ import json
 import frappe
 from frappe import _
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 def _assert_service_caller():
     """Only the bridge service account (System Manager / Administrator) may call."""
@@ -47,7 +49,7 @@ def record(event=None, actor=None, project=None, outcome="success", detail=None)
         "doctype": "BP Audit Log",
         "event": event,
         "actor": actor,
-        "project": project if project and frappe.db.exists("BP Project", project) else None,
+        "project": project if project and frappe.db.exists(PROJECT(), project) else None,
         "outcome": outcome or "success",
         "detail": detail,
     })

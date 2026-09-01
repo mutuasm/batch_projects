@@ -12,6 +12,8 @@ import json
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 # Internal/integration bookkeeping has no reason to ride in a general task
 # detail response. Keeping these server-only also prevents future UI code from
@@ -37,7 +39,7 @@ def _visible_link_names(links) -> set[str]:
     if not names:
         return set()
     rows = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"name": ["in", list(names)]},
         fields=["name", "project", "is_deleted"],
     )
@@ -58,7 +60,7 @@ def _visible_subtask_names(subtasks) -> set[str]:
     if not names:
         return set()
     rows = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"name": ["in", list(names)], "is_deleted": 0},
         fields=["name", "project"],
     )
@@ -170,7 +172,7 @@ def get_export_data(project, view=None):
 
     live_keys = set(
         frappe.get_all(
-            "BP Task",
+            TASK(),
             filters={"project": project, "is_deleted": 0},
             pluck="task_key",
         )

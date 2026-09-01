@@ -10,6 +10,8 @@ import json
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 def _assert_gateway_service_caller():
     """Require a privileged API-token service identity, never a browser session."""
@@ -44,11 +46,11 @@ def get_context(kind=None, project=None, task=None, **_):
         return {"timezone": frappe.utils.get_system_timezone()}
 
     if kind == "project":
-        if not project or not frappe.db.exists("BP Project", project):
+        if not project or not frappe.db.exists(PROJECT(), project):
             frappe.throw("Project not found")
         from batch_projects.api.board import _normalize_workflow_states
 
-        doc = frappe.get_cached_doc("BP Project", project)
+        doc = frappe.get_cached_doc(PROJECT(), project)
         states = _normalize_workflow_states(doc.get_workflow_states())
         return {
             "workflow_states": [
@@ -59,11 +61,11 @@ def get_context(kind=None, project=None, task=None, **_):
         }
 
     if kind == "task":
-        if not task or not frappe.db.exists("BP Task", task):
+        if not task or not frappe.db.exists(TASK(), task):
             frappe.throw("Task not found")
         from batch_projects.events import _get_watchers
 
-        doc = frappe.get_doc("BP Task", task)
+        doc = frappe.get_doc(TASK(), task)
         reporter_user = ""
         if doc.reporter:
             reporter_user = frappe.db.get_value("Employee", doc.reporter, "user_id") or ""

@@ -26,6 +26,8 @@ LATER task, unlike parent/child) → automation rules cloned with project=new.
 """
 
 import frappe
+
+from batch_projects.doctypes import PROJECT, TASK
 import json
 
 from batch_projects import access
@@ -99,7 +101,7 @@ def list_project_templates():
     if not names:
         return []
     usage_rows = frappe.get_all(
-        "BP Project", filters={"template_used": ["like", "user:%"]},
+        PROJECT(), filters={"template_used": ["like", "user:%"]},
         fields=["template_used"],
     )
     usage_by_template = {}
@@ -162,7 +164,7 @@ def _snapshot_tasks(project, project_start_date):
     from frappe.utils import getdate
 
     rows = frappe.get_all(
-        "BP Task", filters={"project": project, "is_deleted": 0},
+        TASK(), filters={"project": project, "is_deleted": 0},
         fields=["name", "title", "description", "task_type", "status", "priority",
                 "story_points", "labels", "estimated_hours", "billable",
                 "custom_field_values", "parent_task", "start_date", "due_date"],
@@ -214,7 +216,7 @@ def save_project_as_template(project, template_name, description="", category=""
     if not template_name or not template_name.strip():
         frappe.throw("Template name is required.")
 
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
 
     # Templates are workspace-wide visible to every
     # System User (list_project_templates/get_project_template, by design —
@@ -392,7 +394,7 @@ def create_project_from_template(template, project_name, key, start_date=None, c
     if tpl.default_view:
         updates["default_view"] = tpl.default_view
     if updates:
-        frappe.db.set_value("BP Project", new_project, updates)
+        frappe.db.set_value(PROJECT(), new_project, updates)
 
     # ── Custom fields — owner fields FIRST (new ids), then global attach ────
     cf_snapshot = _parse_json(tpl.custom_fields_json, {"global_ids": [], "owner_fields": []})

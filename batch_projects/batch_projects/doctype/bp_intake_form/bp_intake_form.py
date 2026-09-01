@@ -1,6 +1,8 @@
 import frappe
 from frappe.model.document import Document
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 class BPIntakeForm(Document):
     def validate(self):
@@ -26,10 +28,10 @@ class BPIntakeForm(Document):
         workflow configuration — a form otherwise advertises (and later
         creates) tasks with values the project never configured."""
         project = self.project
-        if not project or not frappe.db.exists("BP Project", project):
+        if not project or not frappe.db.exists(PROJECT(), project):
             return
         try:
-            proj = frappe.get_cached_doc("BP Project", project)
+            proj = frappe.get_cached_doc(PROJECT(), project)
         except Exception:
             return
         if self.task_type:

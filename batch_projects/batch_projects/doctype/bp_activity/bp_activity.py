@@ -1,6 +1,8 @@
 import frappe
 from frappe.model.document import Document
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 class BPActivity(Document):
     def validate(self):
@@ -34,7 +36,7 @@ class BPActivity(Document):
         # its "Created" activity, so recurrence_source is authoritative here.
         if self.action_type == "Created" and self.task:
             recurrence_source = frappe.db.get_value(
-                "BP Task", self.task, "recurrence_source"
+                TASK(), self.task, "recurrence_source"
             )
             if recurrence_source:
                 self.source = "system"

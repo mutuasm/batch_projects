@@ -18,6 +18,8 @@ import contextlib
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 STEP = 1 << 16          # 65536 — gap between freshly-spaced ranks
 WIDTH = 12              # zero-pad width; fits ranks up to ~10^12
 
@@ -55,7 +57,7 @@ def rank_between(prev: str | None, nxt: str | None):
 def end_rank(project: str, status: str) -> str:
     """Rank that appends to the end of a (project, status) column."""
     last = frappe.db.get_value(
-        "BP Task", {"project": project, "status": status},
+        TASK(), {"project": project, "status": status},
         "board_rank", order_by="board_rank desc")
     return rank_between(last, None) if last else fmt(STEP)
 
@@ -89,8 +91,8 @@ def column_lock(project: str, status: str, timeout: int = 5):
 def rebalance_column(project: str, status: str):
     """Re-space every task in a column evenly. Cheap and rare."""
     names = frappe.get_all(
-        "BP Task", filters={"project": project, "status": status},
+        TASK(), filters={"project": project, "status": status},
         order_by="board_rank asc, creation asc", pluck="name")
     for i, name in enumerate(names, start=1):
-        frappe.db.set_value("BP Task", name, "board_rank", fmt(i * STEP),
+        frappe.db.set_value(TASK(), name, "board_rank", fmt(i * STEP),
                             update_modified=False)
