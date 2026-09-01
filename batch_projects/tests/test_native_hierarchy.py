@@ -64,17 +64,12 @@ class TestHierarchyMigration(IntegrationTestCase):
         # The hierarchy pass reads neither — only parent_task and the
         # erpnext_task anchor — but both links have to resolve on insert.
         tag = frappe.generate_hash("", 8)
-        # company is mandatory on native Project. Resolved the same way
-        # migrate_project resolves it, so the fixture cannot pass where the
-        # real migration would fail.
-        company = frappe.defaults.get_global_default("company") or next(
-            iter(frappe.get_all("Company", limit=1, pluck="name")), None
-        )
-        if not company:
-            self.skipTest("no Company on this site; native Project cannot be created")
-        self.project = frappe.get_doc(
-            {"doctype": "Project", "project_name": f"hier {tag}", "company": company}
-        ).insert(ignore_permissions=True)
+        # No native Project here on purpose. Task.project is optional (subject
+        # is Task's only mandatory field) and the hierarchy pass never reads a
+        # project — it works entirely from parent_task and the erpnext_task
+        # anchor. An earlier version created one, which dragged in Project's
+        # mandatory `company` and made all six of these skip on any site
+        # without a Company. They passed CI while never running.
         self.bp_project = frappe.get_doc(
             {"doctype": "BP Project", "project_name": f"hier bp {tag}", "key": tag[:6].upper()}
         )
@@ -88,7 +83,6 @@ class TestHierarchyMigration(IntegrationTestCase):
                 {
                     "doctype": "Task",
                     "subject": f"{key} {frappe.generate_hash('', 6)}",
-                    "project": self.project.name,
                 }
             ).insert(ignore_permissions=True)
 
