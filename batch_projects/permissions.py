@@ -614,7 +614,18 @@ def native_project_query_conditions(user=None):
 
     A project with no `custom_visibility` was not created through this app, so
     it stays visible exactly as stock ERPNext would show it.
+
+    Returns no restriction at all while the native switch is off. The hook is
+    registered unconditionally so activation needs no hooks change, which means
+    this guard is what keeps a site that has not opted in completely unaffected
+    — without it, merely installing the app would start filtering every
+    Project query for HRMS, CRM and stock ERPNext users.
     """
+    from batch_projects.doctypes import use_native
+
+    if not use_native():
+        return ""
+
     user = user or frappe.session.user
     accessible = get_accessible_projects(user)
     if accessible is None:
@@ -637,6 +648,11 @@ def native_task_query_conditions(user=None):
     (see frappe/database/schema.py NOT_NULL_TYPES), so pre-existing ERPNext
     tasks read as 0 rather than NULL and are not hidden by the trash filter.
     """
+    from batch_projects.doctypes import use_native
+
+    if not use_native():
+        return ""  # see native_project_query_conditions — inert until activated
+
     user = user or frappe.session.user
     not_deleted = "`tabTask`.`custom_is_deleted` = 0"
 

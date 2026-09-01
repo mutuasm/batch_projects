@@ -127,6 +127,13 @@ after_migrate = [
 # REST (mark_notification_read/_unread are the correct, redundant-but-
 # harmless whitelisted path for the SPA).
 permission_query_conditions = {
+    # Native Project/Task. Registered unconditionally so activation needs no
+    # hooks change, but both functions return "" — no restriction whatsoever —
+    # until `bp_use_native_doctypes` is set. Without that guard, merely
+    # installing this app would start filtering every Project and Task query
+    # for HRMS, CRM and stock ERPNext users.
+    "Project":            "batch_projects.permissions.native_project_query_conditions",
+    "Task":               "batch_projects.permissions.native_task_query_conditions",
     "BP Task":            "batch_projects.permissions.bp_task_query_conditions",
     "BP Project":         "batch_projects.permissions.bp_project_query_conditions",
     "BP Sprint":          "batch_projects.permissions.bp_sprint_query_conditions",

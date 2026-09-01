@@ -25,6 +25,7 @@ Run with:
 
 from unittest.mock import patch
 
+import frappe
 from frappe.tests import UnitTestCase
 
 from batch_projects import permissions
@@ -33,7 +34,27 @@ from batch_projects import permissions
 _BP_MANAGED = "`custom_visibility` is not null"
 
 
-class TestNativeProjectScoping(UnitTestCase):
+class _NativeOn(UnitTestCase):
+    """Runs with `bp_use_native_doctypes` on.
+
+    The permission functions return "" unconditionally while the switch is off
+    — registering the hooks must not filter Project/Task for HRMS, CRM and
+    stock ERPNext users on a site that never opted in. That inertness is
+    covered by test_native_activation; everything here is about the clauses
+    built once a site HAS opted in, so the flag is on for the whole module.
+    Without this the assertions below pass vacuously against an empty string.
+    """
+
+    def setUp(self):
+        super().setUp()
+        conf = dict(frappe.conf)
+        conf["bp_use_native_doctypes"] = True
+        patcher = patch.object(frappe, "conf", conf)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+
+class TestNativeProjectScoping(_NativeOn):
     def _conditions(self, accessible):
         with patch.object(permissions, "get_accessible_projects", return_value=accessible):
             return permissions.native_project_query_conditions(user="someone@example.com")
@@ -66,7 +87,7 @@ class TestNativeProjectScoping(UnitTestCase):
             self.assertNotIn("1=0", self._conditions(accessible))
 
 
-class TestNativeTaskScoping(UnitTestCase):
+class TestNativeTaskScoping(_NativeOn):
     def _conditions(self, accessible):
         with patch.object(permissions, "get_accessible_projects", return_value=accessible):
             return permissions.native_task_query_conditions(user="someone@example.com")

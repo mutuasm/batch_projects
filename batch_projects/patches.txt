@@ -88,3 +88,10 @@ batch_projects.patches.backfill_run_telemetry_keys
 # Project/Task as Custom Fields. Additive, idempotent, nothing reads them yet.
 # post_model_sync: the native doctypes must be synced before fields attach.
 batch_projects.patches.create_native_project_custom_fields
+
+
+# Native-model activation. A no-op unless bp_use_native_doctypes is set in
+# site_config; see the patch docstring and
+# native_migration.dry_run_native_migration for a preview that writes nothing.
+# Last on purpose: it depends on every doctype and custom field above it.
+batch_projects.patches.activate_native_model
