@@ -15,6 +15,7 @@ from __future__ import annotations
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 TASK_TRASHED = "task.trashed"
@@ -121,7 +122,7 @@ def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
         return []
 
     changed = []
-    children = frappe.get_all(
+    children = bpq.get_all(
         TASK(),
         filters={"parent_task": issue, "is_deleted": 0},
         pluck="name",
@@ -134,7 +135,7 @@ def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
     _stop_active_timers(doc, deleted_on)
 
     users = _assignees(doc.name)
-    frappe.db.set_value(
+    bpq.set_value(
         TASK(),
         doc.name,
         {
@@ -157,7 +158,7 @@ def _restore_tree(issue: str, cascade_stamp) -> list[str]:
     changed = []
     # Restore only descendants deleted by the exact same cascade. A child with
     # an older independent deletion timestamp remains in trash.
-    children = frappe.get_all(
+    children = bpq.get_all(
         TASK(),
         filters={
             "parent_task": issue,
@@ -167,7 +168,7 @@ def _restore_tree(issue: str, cascade_stamp) -> list[str]:
         pluck="name",
     )
 
-    frappe.db.set_value(
+    bpq.set_value(
         TASK(),
         doc.name,
         {"is_deleted": 0, "deleted_on": None, "deleted_by": None},

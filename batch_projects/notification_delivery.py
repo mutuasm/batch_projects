@@ -15,6 +15,7 @@ from __future__ import annotations
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 def resolve_system_user(identity: str | None) -> str | None:
@@ -107,7 +108,7 @@ def can_receive_task_delivery(
     if not user:
         return False
 
-    row = frappe.db.get_value(
+    row = bpq.get_value(
         TASK(), task, ["name", "project", "is_deleted"], as_dict=True
     )
     if not row or not row.project:

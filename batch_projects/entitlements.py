@@ -28,6 +28,7 @@ import json
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 # Every feature key the SPA knows about. This is no longer a monetization map:
 # it exists only so `get_entitlements()` can keep returning the
@@ -219,7 +220,7 @@ def get_entitlements():
         # projects at all" (true first-run — show the create-workspace wizard)
         # or "projects exist but none are shared with me yet" (an invited
         # teammate — show a lightweight join/waiting state instead).
-        "workspace_has_projects": bool(frappe.db.exists(PROJECT(), {})),
+        "workspace_has_projects": bool(bpq.exists(PROJECT(), {})),
         # Per-user "I've already seen/skipped onboarding" — without this,
         # onboarding re-fired on every reload for anyone who skipped it.
         "onboarding_dismissed": frappe.defaults.get_user_default("bp_onboarding_dismissed") == "1",

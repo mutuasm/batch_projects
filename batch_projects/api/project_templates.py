@@ -28,6 +28,7 @@ LATER task, unlike parent/child) → automation rules cloned with project=new.
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 import json
 
 from batch_projects import access
@@ -100,7 +101,7 @@ def list_project_templates():
     )
     if not names:
         return []
-    usage_rows = frappe.get_all(
+    usage_rows = bpq.get_all(
         PROJECT(), filters={"template_used": ["like", "user:%"]},
         fields=["template_used"],
     )
@@ -163,7 +164,7 @@ def _snapshot_tasks(project, project_start_date):
     both, same as the live app does."""
     from frappe.utils import getdate
 
-    rows = frappe.get_all(
+    rows = bpq.get_all(
         TASK(), filters={"project": project, "is_deleted": 0},
         fields=["name", "title", "description", "task_type", "status", "priority",
                 "story_points", "labels", "estimated_hours", "billable",
@@ -394,7 +395,7 @@ def create_project_from_template(template, project_name, key, start_date=None, c
     if tpl.default_view:
         updates["default_view"] = tpl.default_view
     if updates:
-        frappe.db.set_value(PROJECT(), new_project, updates)
+        bpq.set_value(PROJECT(), new_project, updates)
 
     # ── Custom fields — owner fields FIRST (new ids), then global attach ────
     cf_snapshot = _parse_json(tpl.custom_fields_json, {"global_ids": [], "owner_fields": []})

@@ -14,6 +14,7 @@ Marker: tasks seeded by this script have DEMO_MARKER in their description field.
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 import random
 from datetime import datetime, timedelta
 
@@ -111,7 +112,7 @@ def run(project=None, reset=False):
 
     _seed_tasks(proj_doc, status_names, type_names, users)
 
-    tasks = frappe.db.get_all(
+    tasks = bpq.db_get_all(
         TASK(),
         filters={"project": proj_doc.name, "description": ["like", f"%{DEMO_MARKER}%"]},
         fields=["name", "task_key", "status"],
@@ -143,19 +144,19 @@ def _get_project(project_name):
         except frappe.DoesNotExistError:
             print(f"Project {project_name!r} not found.")
             return None
-    names = frappe.db.get_all(PROJECT(), limit=1, order_by="creation asc", pluck="name")
+    names = bpq.db_get_all(PROJECT(), limit=1, order_by="creation asc", pluck="name")
     return frappe.get_doc(PROJECT(), names[0]) if names else None
 
 
 def _already_seeded(project_name):
-    return frappe.db.count(
+    return bpq.count(
         TASK(),
         {"project": project_name, "description": ["like", f"%{DEMO_MARKER}%"]},
     ) > 0
 
 
 def _delete_demo_data(project_name):
-    tasks = frappe.db.get_all(
+    tasks = bpq.db_get_all(
         TASK(),
         filters={"project": project_name, "description": ["like", f"%{DEMO_MARKER}%"]},
         pluck="name",
@@ -213,7 +214,7 @@ def _seed_tasks(proj_doc, status_names, type_names, users):
         # Back-date creation to spread tasks over the past 30 days
         days_ago = random.randint(1, 30)
         created_at = (now - timedelta(days=days_ago)).strftime("%Y-%m-%d %H:%M:%S")
-        frappe.db.set_value(TASK(), doc.name, "creation", created_at)
+        bpq.set_value(TASK(), doc.name, "creation", created_at)
 
 
 def _seed_activities(project_name, tasks, users, completed_statuses, status_names):

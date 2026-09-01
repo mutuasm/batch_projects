@@ -11,6 +11,7 @@ from __future__ import annotations
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 # Mirrors task_invariants.py's _user_row / _user_can_view_task (not yet landed
@@ -58,7 +59,7 @@ def prune_stale_watchers(project: str, users=None) -> list[str]:
 
     removed = []
     for row in rows:
-        task = frappe.db.get_value(
+        task = bpq.get_value(
             TASK(), row.task, ["name", "project", "is_deleted"], as_dict=True
         )
         if not task:

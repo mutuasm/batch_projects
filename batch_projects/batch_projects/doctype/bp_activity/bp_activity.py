@@ -2,6 +2,7 @@ import frappe
 from frappe.model.document import Document
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 class BPActivity(Document):
@@ -35,7 +36,7 @@ class BPActivity(Document):
         # The inserted BP Task is already durable by the time after_insert logs
         # its "Created" activity, so recurrence_source is authoritative here.
         if self.action_type == "Created" and self.task:
-            recurrence_source = frappe.db.get_value(
+            recurrence_source = bpq.get_value(
                 TASK(), self.task, "recurrence_source"
             )
             if recurrence_source:

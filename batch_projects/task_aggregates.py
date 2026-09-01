@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 def _check(project: str, role: str = "BP Viewer") -> None:
@@ -27,7 +28,7 @@ def get_milestone_report(milestone):
     proj = frappe.get_doc(PROJECT(), m.project)
     completed = set(proj.get_completed_statuses())
 
-    tasks = frappe.get_all(
+    tasks = bpq.get_all(
         TASK(),
         filters={"milestone": milestone, "project": m.project, "is_deleted": 0},
         fields=[
@@ -91,7 +92,7 @@ def get_sprint_capacity(sprint):
     doc = frappe.get_doc("BP Sprint", sprint)
     _check(doc.project)
 
-    tasks = frappe.get_all(
+    tasks = bpq.get_all(
         TASK(),
         filters={"sprint": sprint, "project": doc.project, "is_deleted": 0},
         fields=["name", "estimated_hours"],
@@ -153,11 +154,11 @@ def _resolve_report_projects(project):
     if requested is None:
         from batch_projects.permissions import get_accessible_projects
         accessible = get_accessible_projects(frappe.session.user)
-        return frappe.get_all(PROJECT(), pluck="name") if accessible is None else list(accessible)
+        return bpq.get_all(PROJECT(), pluck="name") if accessible is None else list(accessible)
 
     resolved = []
     for value in requested:
-        name = value if frappe.db.exists(PROJECT(), value) else frappe.db.get_value(
+        name = value if bpq.exists(PROJECT(), value) else bpq.get_value(
             PROJECT(), {"key": value}, "name"
         )
         if name:
@@ -215,7 +216,7 @@ def get_reports(project, period="last_30_days", from_date=None, to_date=None):
     else:
         from_date, to_date = today - timedelta(days=30), today
 
-    tasks = frappe.get_all(
+    tasks = bpq.get_all(
         TASK(),
         filters={"project": project_filter, "is_deleted": 0},
         fields=[

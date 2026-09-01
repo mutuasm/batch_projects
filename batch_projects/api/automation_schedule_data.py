@@ -11,6 +11,7 @@ import re
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 from batch_projects.api.automation_data import (
     _assert_gateway_service_caller,
@@ -79,7 +80,7 @@ def get_project_facts(projects=None, **_):
     projects = _clean_projects(projects if isinstance(projects, list) else _safe_json(projects, []))
     out = []
     for project in projects:
-        if not frappe.db.exists(PROJECT(), project):
+        if not bpq.exists(PROJECT(), project):
             continue
         doc = frappe.get_cached_doc(PROJECT(), project)
         out.append({
@@ -97,7 +98,7 @@ def get_project_facts(projects=None, **_):
 def list_projects(**_):
     """Return raw project identities. Scope/filter decisions happen in Go."""
     _assert_gateway_service_caller()
-    return frappe.get_all(PROJECT(), pluck="name", order_by="name asc", limit_page_length=_MAX_RESULT_ROWS)
+    return bpq.get_all(PROJECT(), pluck="name", order_by="name asc", limit_page_length=_MAX_RESULT_ROWS)
 
 
 @frappe.whitelist()
@@ -125,7 +126,7 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
     value_filter = str(target)
     if df.fieldtype == "Datetime":
         value_filter = ["between", [f"{target} 00:00:00", f"{target} 23:59:59"]]
-    names = frappe.get_all(
+    names = bpq.get_all(
         TASK(),
         filters={"project": ["in", projects], field: value_filter, "is_deleted": 0},
         pluck="name",
@@ -148,7 +149,7 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
 def get_recurring_task(task=None, **_):
     """Return the current recurrence template row without interpreting it."""
     _assert_gateway_service_caller()
-    if not task or not frappe.db.exists(TASK(), task):
+    if not task or not bpq.exists(TASK(), task):
         return None
     doc = frappe.get_doc(TASK(), task)
     # A trashed or no-longer-recurring task must not serve as a recurrence
@@ -229,9 +230,9 @@ def apply_task_occurrence(mutation=None, **_):
     for required in ("project", "title", "priority", "task_type", "status", "recurrence_source"):
         if not mutation.get(required):
             frappe.throw(f"Recurring occurrence requires final {required}")
-    if not frappe.db.exists(PROJECT(), mutation["project"]):
+    if not bpq.exists(PROJECT(), mutation["project"]):
         frappe.throw("Recurring occurrence project does not exist")
-    if not frappe.db.exists(TASK(), mutation["recurrence_source"]):
+    if not bpq.exists(TASK(), mutation["recurrence_source"]):
         frappe.throw("Recurring occurrence source task does not exist")
 
     duplicate = _duplicate_result(key)

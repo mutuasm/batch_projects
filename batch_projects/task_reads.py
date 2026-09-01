@@ -13,6 +13,7 @@ import json
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 # Internal/integration bookkeeping has no reason to ride in a general task
@@ -38,7 +39,7 @@ def _visible_link_names(links) -> set[str]:
     names = {row.get("linked_task") for row in (links or []) if row.get("linked_task")}
     if not names:
         return set()
-    rows = frappe.get_all(
+    rows = bpq.get_all(
         TASK(),
         filters={"name": ["in", list(names)]},
         fields=["name", "project", "is_deleted"],
@@ -59,7 +60,7 @@ def _visible_subtask_names(subtasks) -> set[str]:
     names = {row.get("name") for row in (subtasks or []) if row.get("name")}
     if not names:
         return set()
-    rows = frappe.get_all(
+    rows = bpq.get_all(
         TASK(),
         filters={"name": ["in", list(names)], "is_deleted": 0},
         fields=["name", "project"],
@@ -171,7 +172,7 @@ def get_export_data(project, view=None):
         return rows
 
     live_keys = set(
-        frappe.get_all(
+        bpq.get_all(
             TASK(),
             filters={"project": project, "is_deleted": 0},
             pluck="task_key",

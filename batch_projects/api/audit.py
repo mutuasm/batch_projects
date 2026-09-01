@@ -18,6 +18,7 @@ import frappe
 from frappe import _
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 def _assert_service_caller():
@@ -49,7 +50,7 @@ def record(event=None, actor=None, project=None, outcome="success", detail=None)
         "doctype": "BP Audit Log",
         "event": event,
         "actor": actor,
-        "project": project if project and frappe.db.exists(PROJECT(), project) else None,
+        "project": project if project and bpq.exists(PROJECT(), project) else None,
         "outcome": outcome or "success",
         "detail": detail,
     })

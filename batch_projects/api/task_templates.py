@@ -10,6 +10,7 @@ locked state on write/apply actions, same pattern as automations.
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 import json
 from batch_projects import access
 
@@ -73,7 +74,7 @@ def save_task_as_template(task, template_name):
         "story_points": task_doc.story_points or 0,
     })
 
-    subtasks = frappe.get_all(
+    subtasks = bpq.get_all(
         TASK(), filters={"parent_task": task}, fields=["title", "task_type"],
         order_by="board_order asc, creation asc",
     )

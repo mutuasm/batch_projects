@@ -12,6 +12,7 @@ Usage:
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 import json
 import uuid
 
@@ -210,7 +211,7 @@ def _invalidate_cache(event_name: str, payload: dict):
         sprint = payload.get("sprint")
         if task and not sprint:
             # sprint may not be in the payload but we can look it up
-            sprint = frappe.db.get_value(TASK(), task, "sprint") if task else None
+            sprint = bpq.get_value(TASK(), task, "sprint") if task else None
         if sprint:
             from batch_projects.api.sprint_analytics import invalidate_sprint_cache
             invalidate_sprint_cache(sprint, project)
@@ -367,7 +368,7 @@ def _event_envelope(event_name: str, payload: dict) -> dict:
     }
 
     task_name = payload.get("task")
-    if task_name and frappe.db.exists(TASK(), task_name):
+    if task_name and bpq.exists(TASK(), task_name):
         task = frappe.get_doc(TASK(), task_name)
         envelope["snapshot"] = {
             "status": task.status,
@@ -508,11 +509,11 @@ def _rule_context(task_name, project) -> dict:
     be one)."""
     ctx = {}
     if project:
-        proj = frappe.db.get_value(PROJECT(), project, "*", as_dict=True)
+        proj = bpq.get_value(PROJECT(), project, "*", as_dict=True)
         if proj:
             ctx.update(proj)
     if task_name:
-        task = frappe.db.get_value(TASK(), task_name, "*", as_dict=True)
+        task = bpq.get_value(TASK(), task_name, "*", as_dict=True)
         if task:
             ctx.update(task)
     return ctx
@@ -574,8 +575,8 @@ def _create_rule_notification(recipient, rule, task_name, project, actor, messag
 
     notification_type = "Rule"
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor or "Automation"
-    task_key = frappe.db.get_value(TASK(), task_name, "task_key") if task_name else None
-    task_title = frappe.db.get_value(TASK(), task_name, "title") if task_name else None
+    task_key = bpq.get_value(TASK(), task_name, "task_key") if task_name else None
+    task_title = bpq.get_value(TASK(), task_name, "title") if task_name else None
 
     if "in_app" in channels:
         frappe.get_doc({
@@ -636,9 +637,9 @@ def _create_notification(recipient, notification_type, task, project, actor, mes
     pref = _get_pref(recipient)
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor
     if task_key is None:
-        task_key = frappe.db.get_value(TASK(), task, "task_key") if task else None
+        task_key = bpq.get_value(TASK(), task, "task_key") if task else None
     if task_title is None:
-        task_title = frappe.db.get_value(TASK(), task, "title") if task else None
+        task_title = bpq.get_value(TASK(), task, "title") if task else None
 
     # In-app channel — created unless the user turned in-app off (default on)
     notif_name = None
@@ -922,7 +923,7 @@ def _send_notification_email(
             # Caller-supplied HTML (digest, weekly summary, report) — use as-is.
             html    = message_html
             key     = task_key or (
-                frappe.db.get_value(PROJECT(), project, "project_name") if project else None
+                bpq.get_value(PROJECT(), project, "project_name") if project else None
             ) or "batch_projects"
             subject = (f"[{key}] " + frappe.utils.strip_html(message)[:70]) if not cta_label \
                       else f"[{key}] {cta_label}"
@@ -1018,7 +1019,7 @@ def _reporter_user(task_name: str) -> str | None:
     """The User behind a task's reporter, or None. `BP Task.reporter` links to
     Employee; Employee.user_id is the User. Returns None for an unlinked
     employee record rather than leaking the employee id downstream."""
-    reporter = frappe.db.get_value(TASK(), task_name, "reporter")
+    reporter = bpq.get_value(TASK(), task_name, "reporter")
     if not reporter:
         return None
     return frappe.db.get_value("Employee", reporter, "user_id") or None
@@ -1077,7 +1078,7 @@ def add_watcher(task_name: str, user: str, reason: str = "manual"):
         "doctype": "BP Task Watcher",
         "task": task_name,
         "user": user,
-        "project": frappe.db.get_value(TASK(), task_name, "project"),
+        "project": bpq.get_value(TASK(), task_name, "project"),
         "watch_reason": reason,
     }).insert(ignore_permissions=True)
 
@@ -1090,7 +1091,7 @@ def _notify_comment(payload, actor, task_name, project):
     preview = _strip_mentions(comment_text)[:100].strip() if comment_text else ""
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor
 
-    task_key = frappe.db.get_value(TASK(), task_name, "task_key") or task_name
+    task_key = bpq.get_value(TASK(), task_name, "task_key") or task_name
 
     # Commenting auto-subscribes user to the issue
     add_watcher(task_name, actor, reason="commented")
@@ -1127,7 +1128,7 @@ def _notify_assignment(payload, actor, task_name, project):
     if not assigned_user or not task_name:
         return
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor
-    task_data = frappe.db.get_value(
+    task_data = bpq.get_value(
         TASK(), task_name, ["task_key", "title", "priority", "due_date"], as_dict=True
     ) or {}
     task_key   = task_data.get("task_key") or task_name
@@ -1150,7 +1151,7 @@ def _notify_status_change(payload, actor, task_name, project):
     from_status = payload.get("from_status", "")
     to_status   = payload.get("to_status", "")
     actor_name  = frappe.db.get_value("User", actor, "full_name") or actor
-    task_key    = frappe.db.get_value(TASK(), task_name, "task_key") or task_name
+    task_key    = bpq.get_value(TASK(), task_name, "task_key") or task_name
     message = f"{actor_name} changed status of {task_key} from {from_status} to {to_status}"
 
     recipients = set(_get_task_recipients(task_name, actor))
@@ -1187,7 +1188,7 @@ def _notify_blockers_cleared(task_name, task_key, project, actor):
 
     done = set(_completed_statuses(project))
     for succ in set(successors):
-        if not frappe.db.exists(TASK(), succ):
+        if not bpq.exists(TASK(), succ):
             continue
         # Any OTHER blocker still open → stay quiet, this one isn't free yet.
         others = frappe.get_all(
@@ -1199,14 +1200,14 @@ def _notify_blockers_cleared(task_name, task_key, project, actor):
         for other in others:
             if other == task_name:
                 continue
-            st = frappe.db.get_value(TASK(), other, ["status", "is_deleted"], as_dict=True)
+            st = bpq.get_value(TASK(), other, ["status", "is_deleted"], as_dict=True)
             if st and not st.get("is_deleted") and st.get("status") not in done:
                 still_blocked = True
                 break
         if still_blocked:
             continue
 
-        succ_key = frappe.db.get_value(TASK(), succ, "task_key") or succ
+        succ_key = bpq.get_value(TASK(), succ, "task_key") or succ
         message = f"{task_key} is done — {succ_key} is no longer blocked"
         for recipient in _get_task_recipients(succ, actor):
             _create_notification(
@@ -1218,11 +1219,11 @@ def _notify_task_created(payload, actor, task_name, project):
     if not task_name or not project:
         return
     # Notify default assignee if different from creator
-    default_assignee = frappe.db.get_value(PROJECT(), project, "default_assignee")
+    default_assignee = bpq.get_value(PROJECT(), project, "default_assignee")
     if default_assignee and default_assignee != actor:
         actor_name = frappe.db.get_value("User", actor, "full_name") or actor
-        task_key = frappe.db.get_value(TASK(), task_name, "task_key") or task_name
-        task_title = frappe.db.get_value(TASK(), task_name, "title") or task_name
+        task_key = bpq.get_value(TASK(), task_name, "task_key") or task_name
+        task_title = bpq.get_value(TASK(), task_name, "title") or task_name
         message = f"{actor_name} created {task_key}: {task_title}"
         _create_notification(default_assignee, "Assignment", task_name, project, actor, message)
         _push_notification_badge({default_assignee}, project)
@@ -1238,8 +1239,8 @@ def _notify_task_updated(payload, actor, task_name, project):
         return
 
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor
-    task_key   = payload.get("task_key") or frappe.db.get_value(TASK(), task_name, "task_key") or task_name
-    task_title = payload.get("title")    or frappe.db.get_value(TASK(), task_name, "title")    or task_name
+    task_key   = payload.get("task_key") or bpq.get_value(TASK(), task_name, "task_key") or task_name
+    task_title = payload.get("title")    or bpq.get_value(TASK(), task_name, "title")    or task_name
 
     if len(notable) == 1:
         label   = _FIELD_LABEL.get(notable[0].get("field", ""), "a field")
@@ -1345,7 +1346,7 @@ def _notify_erp_finance(event_name, payload, actor, project):
             message += " — paid in full"
 
     recipients = set()
-    lead = frappe.db.get_value(PROJECT(), project, "lead")
+    lead = bpq.get_value(PROJECT(), project, "lead")
     if lead:
         recipients.add(lead)
     for m in frappe.get_all(
@@ -1373,8 +1374,8 @@ def _notify_task_unassigned(payload, actor, task_name, project):
     if not removed_user or not task_name:
         return
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor
-    task_key   = payload.get("task_key") or frappe.db.get_value(TASK(), task_name, "task_key") or task_name
-    task_title = frappe.db.get_value(TASK(), task_name, "title") or task_name
+    task_key   = payload.get("task_key") or bpq.get_value(TASK(), task_name, "task_key") or task_name
+    task_title = bpq.get_value(TASK(), task_name, "title") or task_name
     message    = f"{actor_name} unassigned you from {task_key}: {task_title}"
     _create_notification(removed_user, "Unassigned", task_name, project, actor, message)
     _push_notification_badge({removed_user}, project)
@@ -1387,8 +1388,8 @@ def _notify_approval_requested(payload, actor, task_name, project):
     if not approver or not task_name:
         return
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor
-    task_key   = frappe.db.get_value(TASK(), task_name, "task_key") or task_name
-    task_title = frappe.db.get_value(TASK(), task_name, "title") or task_name
+    task_key   = bpq.get_value(TASK(), task_name, "task_key") or task_name
+    task_title = bpq.get_value(TASK(), task_name, "title") or task_name
     message = f"{actor_name} requested your approval on {task_key}: {task_title}"
     add_watcher(task_name, approver, reason="approval")  # so they see the eventual decision too
     _create_notification(approver, "Approval Requested", task_name, project, actor, message)
@@ -1405,8 +1406,8 @@ def _notify_approval_decided(payload, actor, task_name, project):
         return
     decision = payload.get("decision") or "decided"
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor
-    task_key   = frappe.db.get_value(TASK(), task_name, "task_key") or task_name
-    task_title = frappe.db.get_value(TASK(), task_name, "title") or task_name
+    task_key   = bpq.get_value(TASK(), task_name, "task_key") or task_name
+    task_title = bpq.get_value(TASK(), task_name, "title") or task_name
     message = f"{actor_name} {decision.lower()} {task_key}: {task_title}"
 
     recipients = set(_get_task_recipients(task_name, actor))
@@ -1429,7 +1430,7 @@ def _notify_role_changed(payload, actor, project):
     old_role = payload.get("old_role")
     new_role = payload.get("new_role")
     actor_name   = frappe.db.get_value("User", actor, "full_name") or actor
-    project_name = frappe.db.get_value(PROJECT(), project, "project_name") or project
+    project_name = bpq.get_value(PROJECT(), project, "project_name") or project
     if old_role:
         message = f"{actor_name} changed your role on {project_name} to {new_role}"
     else:
@@ -1450,7 +1451,7 @@ def purge_expired_trash():
     from batch_projects.api.board import _hard_delete_task, TRASH_RETENTION_DAYS
 
     cutoff = frappe.utils.add_days(frappe.utils.now_datetime(), -TRASH_RETENTION_DAYS)
-    expired = frappe.get_all(
+    expired = bpq.get_all(
         TASK(), filters={"is_deleted": 1, "deleted_on": ["<", cutoff]}, pluck="name"
     )
     for name in expired:
@@ -1478,7 +1479,7 @@ def send_due_date_reminders():
     # task that has EVER had a due_date set — including years-future ones —
     # into memory nightly and filtered in Python; that degrades linearly with
     # total task count forever.
-    tasks = frappe.get_all(
+    tasks = bpq.get_all(
         TASK(),
         filters={"due_date": ["<=", soon_cutoff], "is_deleted": 0},
         fields=["name", "task_key", "title", "project", "status", "due_date"],
@@ -1558,7 +1559,7 @@ def send_daily_digest():
         task_names = frappe.get_all("BP Task Assignee", filters={"user": user}, pluck="parent")
         if not task_names:
             continue
-        tasks = frappe.get_all(
+        tasks = bpq.get_all(
             TASK(),
             filters={"name": ["in", task_names], "is_deleted": 0},
             fields=["name", "task_key", "title", "status", "project", "due_date", "priority"],
@@ -1656,13 +1657,13 @@ def send_weekly_project_summary():
     today = frappe.utils.getdate()
     week_ago = frappe.utils.add_days(today, -7)
 
-    projects = frappe.get_all(
+    projects = bpq.get_all(
         PROJECT(), filters={"status": "Active"},
         fields=["name", "project_name", "key", "lead"],
     )
     for p in projects:
         comp = set(_completed_statuses(p.name))
-        tasks = frappe.get_all(
+        tasks = bpq.get_all(
             TASK(), filters={"project": p.name, "is_deleted": 0},
             fields=["status", "due_date", "creation", "completed_on"],
         )
@@ -1754,7 +1755,7 @@ def run_due_soon_automations():
             completed = set(frappe.get_cached_doc(PROJECT(), project).get_completed_statuses())
         except Exception:
             completed = set()
-        tasks = frappe.get_all(
+        tasks = bpq.get_all(
             TASK(),
             filters={"project": project, "due_date": ["between", [str(today), str(horizon)]], "is_deleted": 0},
             fields=["name", "task_key", "status"],
@@ -1772,7 +1773,7 @@ def run_due_soon_automations():
             # could have been trashed, or moved to a different project, in
             # the time between this project's query above and this specific
             # task's turn in the loop.
-            live = frappe.db.get_value(TASK(), t.name, ["is_deleted", "project"], as_dict=True)
+            live = bpq.get_value(TASK(), t.name, ["is_deleted", "project"], as_dict=True)
             if not live or live.is_deleted or live.project != project:
                 continue
 
@@ -1827,7 +1828,7 @@ def run_overdue_automations():
             completed = set(frappe.get_cached_doc(PROJECT(), project).get_completed_statuses())
         except Exception:
             completed = set()
-        tasks = frappe.get_all(
+        tasks = bpq.get_all(
             TASK(),
             filters={"project": project, "due_date": ["<", str(today)], "is_deleted": 0},
             fields=["name", "task_key", "status"],
@@ -1843,7 +1844,7 @@ def run_overdue_automations():
 
             # Re-read durable state immediately before dispatch — same race
             # window as run_due_soon_automations above.
-            live = frappe.db.get_value(TASK(), t.name, ["is_deleted", "project"], as_dict=True)
+            live = bpq.get_value(TASK(), t.name, ["is_deleted", "project"], as_dict=True)
             if not live or live.is_deleted or live.project != project:
                 continue
 
@@ -1947,7 +1948,7 @@ def _build_report_email_html(r):
 
     url       = desk_urls.report_url(r.name)
     scope     = "All projects" if not r.project else (
-        frappe.db.get_value(PROJECT(), r.project, "project_name") or r.project)
+        bpq.get_value(PROJECT(), r.project, "project_name") or r.project)
 
     return build_report_email(
         r.report_name, scope, r.period or "last_30_days",
@@ -2043,7 +2044,7 @@ def _send_view_subscriptions(frequency: str):
 
 
 def _completed_statuses(project: str) -> list:
-    states = frappe.db.get_value(PROJECT(), project, "workflow_states")
+    states = bpq.get_value(PROJECT(), project, "workflow_states")
     try:
         parsed = json.loads(states) if isinstance(states, str) else (states or [])
     except Exception:

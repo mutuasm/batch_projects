@@ -43,6 +43,7 @@ import math
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 def _assert_service_caller():
@@ -411,7 +412,7 @@ def _visible_money_projects(user: str) -> list[dict]:
     if proj_filters is NO_ACCESSIBLE_PROJECTS:
         return []
 
-    projects = frappe.get_all(
+    projects = bpq.get_all(
         PROJECT(),
         filters=proj_filters,
         fields=["name", "project_name", "key", "project_color", "theme",
@@ -695,7 +696,7 @@ def get_money_inputs(project, from_date, to_date, user):
         r["task"] for r in (task_labour + task_materials + task_expenses + task_committed)
         if r.get("task")
     }
-    tasks = frappe.get_all(
+    tasks = bpq.get_all(
         TASK(), filters={"name": ["in", list(referenced)]},
         fields=["name", "task_key", "title"],
     ) if referenced else []
@@ -764,7 +765,7 @@ def get_portfolio_inputs(user):
     if proj_filters is NO_ACCESSIBLE_PROJECTS:
         return {"projects": [], "tasks": [], "milestones": [], "money_visible": {}}
 
-    projects = frappe.get_all(
+    projects = bpq.get_all(
         PROJECT(),
         filters=proj_filters,
         fields=["name", "project_name", "key", "project_color", "theme",
@@ -792,7 +793,7 @@ def get_portfolio_inputs(user):
         for f in ("start_date", "target_end_date"):
             p[f] = str(p[f]) if p.get(f) else None
 
-    tasks = frappe.get_all(
+    tasks = bpq.get_all(
         TASK(),
         filters=_task_filters({"project": ["in", pnames]}),
         fields=["project", "status", "due_date"],

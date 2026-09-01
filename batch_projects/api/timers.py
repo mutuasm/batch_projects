@@ -13,6 +13,7 @@ import frappe
 from frappe.utils import flt, get_datetime, now_datetime, time_diff_in_hours
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 from erpnext.projects.doctype.timesheet.timesheet import get_activity_cost
 
 from batch_projects.api.board import _check_task_permission, _require_system_user
@@ -37,7 +38,7 @@ def get_active_timer():
     if not row:
         return None
 
-    task = frappe.db.get_value(
+    task = bpq.get_value(
         TASK(), row.task, ["name", "task_key", "title", "project", "is_deleted"], as_dict=True
     )
     if not task or task.is_deleted:
@@ -300,7 +301,7 @@ def _stop(active_timer_name):
     user = row.user
     task_name = row.task
 
-    task_row = frappe.db.get_value(
+    task_row = bpq.get_value(
         TASK(), task_name, ["is_deleted", "deleted_on"], as_dict=True
     )
     if not task_row:
@@ -374,7 +375,7 @@ def _get_editable_time_log(time_log_name):
 
     task_name = row.custom_bp_task
     if task_name:
-        task_project = frappe.db.get_value(TASK(), task_name, "project")
+        task_project = bpq.get_value(TASK(), task_name, "project")
         if task_project:
             _check_task_permission(task_name, task_project, "BP Member")
     elif ts.owner != frappe.session.user and "System Manager" not in frappe.get_roles():
@@ -479,7 +480,7 @@ def send_timer_reminders():
     for row in rows:
         if not row.task or _reminder_sent_today(row.user, row.task, "Timer Reminder"):
             continue
-        task = frappe.db.get_value(
+        task = bpq.get_value(
             TASK(), row.task, ["task_key", "title", "project", "is_deleted"], as_dict=True
         )
         if not task or task.is_deleted:

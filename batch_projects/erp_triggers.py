@@ -18,6 +18,7 @@ import frappe
 from frappe.utils import flt
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 from batch_projects.api.erp_link import _tenant_ok
 
@@ -100,7 +101,7 @@ def _bp_project_for(doctype: str, name: str, erp_project: str):
     implementation in the codebase, not two."""
     if not erp_project:
         return None
-    bp_project = frappe.db.get_value(PROJECT(), {"erpnext_project": erp_project}, "name")
+    bp_project = bpq.get_value(PROJECT(), {"erpnext_project": erp_project}, "name")
     if not bp_project:
         return None
     if not _tenant_ok(doctype, name, erp_project):

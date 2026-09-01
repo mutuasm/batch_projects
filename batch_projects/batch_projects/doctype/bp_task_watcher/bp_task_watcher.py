@@ -5,6 +5,7 @@ import frappe
 from frappe.model.document import Document
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 class BPTaskWatcher(Document):
@@ -18,7 +19,7 @@ class BPTaskWatcher(Document):
         """
         from batch_projects.task_invariants import _user_can_view_task
 
-        task = frappe.db.get_value(
+        task = bpq.get_value(
             TASK(), self.task, ["project", "is_deleted"], as_dict=True
         )
         if not task or task.is_deleted:

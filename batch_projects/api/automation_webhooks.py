@@ -10,6 +10,7 @@ import secrets
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 from batch_projects.api.automation_data import _assert_gateway_service_caller
 
@@ -80,7 +81,7 @@ def create_webhook_token(label, scope="project", project=None):
     if scope not in ("workspace", "project"):
         frappe.throw("scope must be 'workspace' or 'project'.")
     if scope == "project":
-        if not project or not frappe.db.exists(PROJECT(), project):
+        if not project or not bpq.exists(PROJECT(), project):
             frappe.throw("An existing project is required for a project webhook.")
     else:
         project = None

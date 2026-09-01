@@ -13,12 +13,13 @@ edit, so it deliberately skips BP Task's save-side activity log / events.emit.
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 def sync_task_actual_hours(task_name: str):
     """Recompute one BP Task's actual_hours. Safe to call for a task that
     doesn't exist or has no timesheet rows (resolves to 0)."""
-    if not task_name or not frappe.db.exists(TASK(), task_name):
+    if not task_name or not bpq.exists(TASK(), task_name):
         return
 
     rows = frappe.db.sql(
@@ -32,14 +33,14 @@ def sync_task_actual_hours(task_name: str):
         as_dict=True,
     )
     hours = round(float(rows[0].h or 0), 2) if rows else 0.0
-    frappe.db.set_value(TASK(), task_name, "actual_hours", hours, update_modified=False)
+    bpq.set_value(TASK(), task_name, "actual_hours", hours, update_modified=False)
 
 
 def sync_project_actual_hours(bp_project: str):
     """Bulk variant: resync every task in a BP Project. The live path is the
     Timesheet submit/cancel doc_events below; this is the manual/backfill
     entry point, and reconcile_actual_hours() is the scheduled safety net."""
-    for task_name in frappe.get_all(TASK(), filters={"project": bp_project}, pluck="name"):
+    for task_name in bpq.get_all(TASK(), filters={"project": bp_project}, pluck="name"):
         sync_task_actual_hours(task_name)
 
 
@@ -91,7 +92,7 @@ def reconcile_actual_hours():
     for r in rows:
         # Same write the live path uses — a system recompute, so it must not
         # bump `modified` or fire task events.
-        frappe.db.set_value(
+        bpq.set_value(
             TASK(), r.task, "actual_hours", round(float(r.truth or 0), 2),
             update_modified=False,
         )

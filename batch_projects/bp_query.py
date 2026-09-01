@@ -160,4 +160,9 @@ def count(doctype, filters=None, **kwargs):
     target = _target(doctype)
     if target and isinstance(filters, dict):
         filters = _filters(target, filters)
-    return frappe.db.count(doctype, filters, **kwargs)
+    # Passed as a keyword because that is frappe's own parameter name here, and
+    # because callers (and the tests that patch this) inspect
+    # call_args.kwargs["filters"]. Positional would still work but would break
+    # that introspection silently. `exists` and `set_value` take `dn` rather
+    # than `filters`, so they stay positional on purpose.
+    return frappe.db.count(doctype, filters=filters, **kwargs)

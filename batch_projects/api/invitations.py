@@ -14,6 +14,7 @@ from frappe import _
 from frappe.utils import now_datetime, add_days, get_url, validate_email_address
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 from batch_projects import access
 
@@ -127,7 +128,7 @@ def invite_member(project, email, role="Member"):
 
     email = _normalize_email(email)
     role = role if role in VALID_ROLES else "Member"
-    project_title = frappe.db.get_value(PROJECT(), project, "project_name") or project
+    project_title = bpq.get_value(PROJECT(), project, "project_name") or project
 
     user = frappe.db.get_value("User", {"email": email}, "name") or \
         (email if frappe.db.exists("User", email) else None)
@@ -257,7 +258,7 @@ def resend_invitation(name):
     inv.expires_on = add_days(now_datetime(), INVITE_TTL_DAYS)
     inv.save(ignore_permissions=True)
     frappe.db.commit()
-    project_title = frappe.db.get_value(
+    project_title = bpq.get_value(
         PROJECT(), inv.project, "project_name") or inv.project
     new_account = not frappe.db.get_value("User", inv.email, "last_login")
     _send_invite_email(inv, project_title, new_account)
@@ -280,7 +281,7 @@ def get_invitation(token):
     if not inv:
         frappe.throw(_("This invitation link is invalid."), frappe.DoesNotExistError)
 
-    project_title = frappe.db.get_value(
+    project_title = bpq.get_value(
         PROJECT(), inv.project, "project_name") or inv.project
     state = inv.status
     if state == "Pending" and inv.expires_on and inv.expires_on < now_datetime():
@@ -320,7 +321,7 @@ def _finalize_accept(inv, user):
     invalidate_project(inv.project)
     return {
         "ok": True, "project": inv.project, "role": inv.role,
-        "project_key": frappe.db.get_value(PROJECT(), inv.project, "key"),
+        "project_key": bpq.get_value(PROJECT(), inv.project, "key"),
     }
 
 
@@ -378,7 +379,7 @@ def accept_invitation(token):
     inv, already = _load_pending(token)
     if already:
         return {"ok": True, "project": inv.project, "already": True,
-                "project_key": frappe.db.get_value(PROJECT(), inv.project, "key")}
+                "project_key": bpq.get_value(PROJECT(), inv.project, "key")}
 
     user_email = (frappe.db.get_value("User", frappe.session.user, "email")
                   or frappe.session.user).lower()

@@ -12,6 +12,7 @@ import frappe
 from frappe import _
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 
@@ -220,12 +221,12 @@ def test_workflow(name, task=None):
 
     task_doc = None
     if task:
-        if not frappe.db.exists(TASK(), task):
+        if not bpq.exists(TASK(), task):
             frappe.throw(_("Task not found."))
         task_doc = frappe.get_doc(TASK(), task)
     else:
         filters = {"project": doc.project} if doc.scope == "project" and doc.project else {}
-        recent = frappe.db.get_value(TASK(), filters, "name", order_by="modified desc")
+        recent = bpq.get_value(TASK(), filters, "name", order_by="modified desc")
         if recent:
             task_doc = frappe.get_doc(TASK(), recent)
 

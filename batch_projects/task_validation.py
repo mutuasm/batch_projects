@@ -12,6 +12,7 @@ import json
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 from batch_projects import task_invariants
 
@@ -38,7 +39,7 @@ def validate_task_labels(doc, old=None) -> None:
         frappe.throw("A task cannot contain the same label more than once.", frappe.ValidationError)
     if not labels:
         return
-    raw_catalog = frappe.db.get_value(PROJECT(), doc.project, "labels") or "[]"
+    raw_catalog = bpq.get_value(PROJECT(), doc.project, "labels") or "[]"
     try:
         catalog = json.loads(raw_catalog) if isinstance(raw_catalog, str) else raw_catalog
     except (TypeError, ValueError):
@@ -73,7 +74,7 @@ def validate_link_visibility(doc, old=None) -> None:
         changed = not old or old.project != doc.project or signature not in old_signatures
         if not changed or not row.linked_task:
             continue
-        target = frappe.db.get_value(
+        target = bpq.get_value(
             TASK(), row.linked_task, ["name", "project", "is_deleted"], as_dict=True
         )
         if not target or target.is_deleted:
@@ -116,7 +117,7 @@ def validate_completion_dependencies(doc, old=None) -> None:
     if not blocker_names:
         return
     blockers = [
-        row for row in frappe.get_all(
+        row for row in bpq.get_all(
             TASK(),
             filters={"name": ["in", list(blocker_names)], "is_deleted": 0},
             fields=["name", "task_key", "title", "status"],

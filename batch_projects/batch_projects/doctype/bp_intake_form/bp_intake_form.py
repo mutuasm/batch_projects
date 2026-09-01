@@ -2,6 +2,7 @@ import frappe
 from frappe.model.document import Document
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 class BPIntakeForm(Document):
@@ -28,7 +29,7 @@ class BPIntakeForm(Document):
         workflow configuration — a form otherwise advertises (and later
         creates) tasks with values the project never configured."""
         project = self.project
-        if not project or not frappe.db.exists(PROJECT(), project):
+        if not project or not bpq.exists(PROJECT(), project):
             return
         try:
             proj = frappe.get_cached_doc(PROJECT(), project)

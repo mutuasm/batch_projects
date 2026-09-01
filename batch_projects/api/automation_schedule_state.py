@@ -10,6 +10,7 @@ import json
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 from batch_projects.api.automation_data import (
     _assert_gateway_service_caller,
@@ -41,7 +42,7 @@ def apply_recurrence_state(mutation=None, **_):
     task = mutation.get("task")
     if not isinstance(key, str) or not key.strip() or len(key) > 128:
         frappe.throw("A bounded idempotency_key is required")
-    if not isinstance(task, str) or not task or not frappe.db.exists(TASK(), task):
+    if not isinstance(task, str) or not task or not bpq.exists(TASK(), task):
         frappe.throw("Recurrence state requires an existing task")
     if not isinstance(mutation.get("is_recurring"), bool):
         frappe.throw("is_recurring must be a final boolean")
@@ -66,7 +67,7 @@ def apply_recurrence_state(mutation=None, **_):
             return duplicate
         raise
 
-    current = frappe.db.get_value(TASK(), task, ["is_recurring", "bridge_job_id"], as_dict=True)
+    current = bpq.get_value(TASK(), task, ["is_recurring", "bridge_job_id"], as_dict=True)
     final_recurring = 1 if mutation["is_recurring"] else 0
     changed = []
     if int(current.is_recurring or 0) != final_recurring:
@@ -75,7 +76,7 @@ def apply_recurrence_state(mutation=None, **_):
         changed.append("bridge_job_id")
 
     if changed:
-        frappe.db.set_value(
+        bpq.set_value(
             TASK(), task,
             {"is_recurring": final_recurring, "bridge_job_id": bridge_job_id},
             update_modified=False,

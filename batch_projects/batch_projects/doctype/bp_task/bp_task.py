@@ -3,6 +3,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 import json
 
 # ─── RECURRENCE ────────────────────────────────────────────────────────────
@@ -666,7 +667,7 @@ def spawn_recurring_occurrence(task_name):
     from batch_projects import bridge
     from frappe.utils import getdate, nowdate, add_to_date
 
-    if not frappe.db.exists(TASK(), task_name):
+    if not bpq.exists(TASK(), task_name):
         return ("Skipped", "template task no longer exists")
 
     template = frappe.get_doc(TASK(), task_name)
@@ -682,8 +683,8 @@ def spawn_recurring_occurrence(task_name):
                     bridge.cancel_scheduled_job(template.bridge_job_id)
             except Exception:
                 pass
-            frappe.db.set_value(TASK(), task_name, "is_recurring", 0, update_modified=False)
-            frappe.db.set_value(TASK(), task_name, "bridge_job_id", None, update_modified=False)
+            bpq.set_value(TASK(), task_name, "is_recurring", 0, update_modified=False)
+            bpq.set_value(TASK(), task_name, "bridge_job_id", None, update_modified=False)
             return ("Skipped", "recurrence end date passed")
 
     interval = _RECURRENCE_INTERVAL_SECONDS.get(template.recurrence_frequency or "", 86400)

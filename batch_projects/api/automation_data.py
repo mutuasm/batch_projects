@@ -11,6 +11,7 @@ import json
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 def _assert_gateway_service_caller():
@@ -46,7 +47,7 @@ def get_context(kind=None, project=None, task=None, **_):
         return {"timezone": frappe.utils.get_system_timezone()}
 
     if kind == "project":
-        if not project or not frappe.db.exists(PROJECT(), project):
+        if not project or not bpq.exists(PROJECT(), project):
             frappe.throw("Project not found")
         from batch_projects.api.board import _normalize_workflow_states
 
@@ -61,7 +62,7 @@ def get_context(kind=None, project=None, task=None, **_):
         }
 
     if kind == "task":
-        if not task or not frappe.db.exists(TASK(), task):
+        if not task or not bpq.exists(TASK(), task):
             frappe.throw("Task not found")
         from batch_projects.events import _get_watchers
 

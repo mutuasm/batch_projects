@@ -5,6 +5,7 @@ from __future__ import annotations
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 @frappe.whitelist()
@@ -22,7 +23,7 @@ def complete_sprint(sprint, move_incomplete_to=None):
     if done_statuses:
         filters["status"] = ["not in", done_statuses]
 
-    incomplete = frappe.get_all(TASK(), filters=filters, fields=["name"])
+    incomplete = bpq.get_all(TASK(), filters=filters, fields=["name"])
     target = move_incomplete_to or None
 
     if incomplete:
@@ -43,7 +44,7 @@ def complete_sprint(sprint, move_incomplete_to=None):
 
     from batch_projects.events import emit, SPRINT_COMPLETED
     completed_count = (
-        frappe.db.count(
+        bpq.count(
             TASK(),
             {
                 "sprint": sprint,

@@ -11,6 +11,7 @@ from __future__ import annotations
 import frappe
 
 from batch_projects.doctypes import PROJECT, TASK
+from batch_projects import bp_query as bpq
 
 
 def _dashboard_module():
@@ -213,7 +214,7 @@ def get_multi_source_count(sources, scope=None):
                 for key, value in scope_filters.items()
             ] + db_filters
             db_filters.append(["is_deleted", "=", 0])
-            count = frappe.db.count(TASK(), filters=db_filters)
+            count = bpq.count(TASK(), filters=db_filters)
         else:
             count = len(_read_rows(doctype, filters=db_filters, fields=["name"], limit=0))
         breakdown.append({"doctype": doctype, "label": entry["label"], "count": count})
