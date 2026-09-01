@@ -23,7 +23,15 @@ from batch_projects.notification_delivery import can_receive_task_delivery
 
 class BPEmailQueue(EmailQueue):
     def _is_bp_task_mail(self) -> bool:
-        return self.reference_doctype == "BP Task" and bool(self.reference_name)
+        # Must follow the same switch as the sender. events.py sets
+        # reference_doctype=TASK() when queueing task mail; if this comparison
+        # stayed pinned to "BP Task" while the sender moved to "Task", this
+        # last-mile authorization check would silently stop matching any task
+        # email at all — no error, no log, just an authorization step that
+        # quietly no longer runs.
+        from batch_projects.doctypes import TASK
+
+        return self.reference_doctype == TASK() and bool(self.reference_name)
 
     def validate(self):
         parent_validate = getattr(super(), "validate", None)
