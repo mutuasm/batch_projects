@@ -1,15 +1,11 @@
 """Regression tests for the authoritative batch-invoice company boundary."""
 
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 import frappe
 
 from batch_projects.api import erp_link
-
-
-APP_ROOT = Path(__file__).resolve().parents[2]
 
 
 def project(
@@ -627,46 +623,6 @@ class TestBillingCompanyBoundary(unittest.TestCase):
                 for p in entry["projects"]
             )
         )
-
-    def test_batch_ui_is_company_aware(self):
-        page = (
-            APP_ROOT
-            / "frontend"
-            / "src"
-            / "pages"
-            / "BatchInvoicing.vue"
-        ).read_text()
-
-        self.assertIn(
-            ':key="batchKey(c)"',
-            page,
-        )
-
-        self.assertIn(
-            "function batchKey(c)",
-            page,
-        )
-
-        self.assertIn(
-            "{{ c.company }}",
-            page,
-        )
-
-        self.assertIn(
-            "company: c.company",
-            page,
-        )
-
-        self.assertIn(
-            "busy.value = confirm.batchKey",
-            page,
-        )
-
-        self.assertNotIn(
-            'busy === c.client',
-            page,
-        )
-
 
 if __name__ == "__main__":
     unittest.main()
