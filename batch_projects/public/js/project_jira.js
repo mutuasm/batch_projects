@@ -25,9 +25,46 @@ function bp_task_view_url(view, project, extra) {
 	return `${base}?${params.toString()}`;
 }
 
+// Frappe carries tree scope across visits in two places, and routing clears
+// neither: make_filters() writes `default` onto the *shared* filter objects in
+// frappe.treeview_settings["Task"], and only overwrites it when route_options
+// has a truthy value; separately, revisiting an already-built tree page goes
+// through on_show(), which rebuilds from the TreeView's retained `args`.
+//
+// So opening one project's tree and then entering the tree unscoped shows the
+// previous project's hierarchy — the wrong tasks, with nothing to indicate it.
+// Both places are therefore set explicitly on every entry, including the empty
+// case, which is the one route_options cannot express.
+function bp_scope_task_tree(project) {
+	const settings = frappe.treeview_settings && frappe.treeview_settings["Task"];
+	if (settings && Array.isArray(settings.filters)) {
+		settings.filters.forEach((f) => {
+			if (f.fieldname === "project") {
+				f.default = project || "";
+			} else if (f.fieldname === "task") {
+				f.default = "";  // a task filter from a different project cannot apply
+			}
+		});
+	}
+	const live = frappe.views.trees && frappe.views.trees["Task"];
+	if (live && live.args) {
+		if (project) {
+			live.args.project = project;
+		} else {
+			delete live.args.project;
+		}
+		delete live.args.task;
+	}
+}
+
 function bp_go(view, project, extra) {
 	// route_options is how the desk applies filters to the view it opens.
 	frappe.route_options = { project, ...(extra || {}) };
+	if (view === "tree") {
+		bp_scope_task_tree(project);
+		frappe.set_route("task", "view", "tree");
+		return;
+	}
 	if (view === "kanban") {
 		frappe.set_route("task", "view", "kanban", BP_BOARD);
 	} else {
@@ -85,6 +122,8 @@ frappe.listview_settings["Project"] = (function () {
 				frappe.set_route("task", "view", "kanban", BP_BOARD);
 			});
 			listview.page.add_inner_button(__("Task Tree"), () => {
+				// Deliberately unscoped — every task, all projects.
+				bp_scope_task_tree(null);
 				frappe.set_route("task", "view", "tree");
 			});
 		},
