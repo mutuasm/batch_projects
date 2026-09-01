@@ -13,6 +13,8 @@ workspace-admin content customization.
 """
 
 import frappe
+
+from batch_projects import desk_urls
 import json
 
 from batch_projects import access
@@ -127,7 +129,7 @@ def preview_notification_template(event_key, subject="", body=""):
     from batch_projects.email_templates import build_custom_notification_email
     html = build_custom_notification_email(
         event_key, ctx.get("task_key", ""), rendered_body,
-        frappe.utils.get_url("/workspace/account"),
+        desk_urls.notification_settings_url(),
     )
     return {"subject": rendered_subject, "html": html}
 

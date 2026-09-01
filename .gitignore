@@ -17,15 +17,10 @@ Thumbs.db
 
 # Frontend dependencies — never commit node_modules
 node_modules/
-frontend/node_modules/
 
 # Frontend generated/cache — auto-generated, not needed in repo
-frontend/auto-imports.d.ts
-frontend/components.d.ts
-frontend/.eslintcache
 
 # Frontend build output — KEEP TRACKED so client installs work without Node
-# batch_projects/public/frontend  ← DO NOT ignore this
 
 # Misc
 dist/

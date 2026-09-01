@@ -56,24 +56,20 @@ See [`deploy/README.md`](deploy/README.md) for Projects/Gateway/ERPNext compatib
 
 ## Development setup
 
-Projects is a Frappe app plus a Vue 3 / Vite SPA.
-
-Frappe/ERPNext v16 require **Python 3.14+** and **Node 24+**; the CI matrix
-pins exactly those.
+Projects is a Frappe app with no frontend of its own. The UI is the Frappe v16
+desk — native Project/Task list, kanban and tree views, plus the app's own
+doctypes — so there is no build step, no Node toolchain, and nothing to compile
+before running it.
 
 ```bash
 # Install the current stable release line inside an existing bench
 bench get-app https://github.com/BatchNepal/batch_projects --branch version-16
 bench --site yoursite.local install-app batch_projects
-
-# Frontend
-cd apps/batch_projects/frontend
-NODE_ENV=development yarn install --production=false
-yarn dev
-yarn build
+bench --site yoursite.local migrate
 ```
 
-`bench build` does **not** rebuild the standalone Vite SPA. After frontend source changes, run `yarn build` and commit the resulting `batch_projects/public/frontend/` output in the same PR.
+The Vue SPA that used to live in `frontend/` was removed in 2.0.0; see the
+CHANGELOG for what went with it.
 
 ## Testing expectations
 

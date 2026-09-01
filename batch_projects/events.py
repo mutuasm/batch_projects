@@ -836,18 +836,25 @@ def _has_outgoing_email() -> bool:
 
 
 def _project_url(project: str, view: str = "board") -> str:
-    key = frappe.db.get_value("BP Project", project, "key") if project else None
-    base = frappe.utils.get_url()
-    return f"{base}/workspace/{key}/{view}" if key else f"{base}/workspace"
+    """The project's task list, or its record.
+
+    `view` is kept for call-site compatibility but no longer selects a board /
+    list / gantt route — those were SPA views. The desk equivalent of "the
+    project's board" is its filtered task list; anything else goes to the
+    project record itself.
+    """
+    from batch_projects import desk_urls
+
+    if view == "board":
+        return desk_urls.project_tasks_url(project)
+    return desk_urls.project_url(project)
 
 
 def _task_url(project: str, task_key: str) -> str:
-    """Deep link to the task on its project board (opens the detail panel)."""
-    key = frappe.db.get_value("BP Project", project, "key") if project else None
-    base = frappe.utils.get_url()
-    if key and task_key:
-        return f"{base}/workspace/{key}/board?task={task_key}"
-    return _project_url(project)
+    """Deep link to the task record."""
+    from batch_projects import desk_urls
+
+    return desk_urls.task_url(project, task_key)
 
 
 # ─── PHASE 16 — CUSTOM TEMPLATE OVERRIDE ─────────────────────────────────────
@@ -905,7 +912,9 @@ def _send_notification_email(
         if not _has_outgoing_email():
             return
 
-        manage_url = frappe.utils.get_url("/workspace/account")
+        from batch_projects import desk_urls
+
+        manage_url = desk_urls.notification_settings_url()
 
         if message_html:
             # Caller-supplied HTML (digest, weekly summary, report) — use as-is.
@@ -1932,7 +1941,9 @@ def _build_report_email_html(r):
     tp        = data.get("throughput") or []
     created   = sum(x.get("created", 0) for x in tp)
     completed = sum(x.get("completed", 0) for x in tp)
-    url       = frappe.utils.get_url(f"/workspace/reports/{r.name}")
+    from batch_projects import desk_urls
+
+    url       = desk_urls.report_url(r.name)
     scope     = "All projects" if not r.project else (
         frappe.db.get_value("BP Project", r.project, "project_name") or r.project)
 
@@ -2020,12 +2031,12 @@ def _send_view_subscriptions(frequency: str):
         html = (f'<div style="font-size:15px;font-weight:600;margin-bottom:10px">'
                 f'{frappe.utils.escape_html(v.view_name)} — {len(issues)} matching</div>{rows}')
         summary = f"Saved view '{v.view_name}': {len(issues)} matching task(s)"
-        key = frappe.db.get_value("BP Project", v.project, "key") or ""
+        from batch_projects import desk_urls
         _send_notification_email(
             recipient=owner, notification_type="Summary", task=None, task_key=None,
             task_title=None, project=v.project, actor_name=None, message=summary,
             message_html=html, cta_label="Open view",
-            cta_url=f"{frappe.utils.get_url()}/workspace/{key}/list" if key else None,
+            cta_url=desk_urls.saved_view_url(v.name),
         )
 
 

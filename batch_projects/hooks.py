@@ -35,19 +35,25 @@ from . import __version__ as app_version
 
 # app_include_js = ["/assets/batch_projects/js/batch_projects.js"]
 
-# Website route rules — catch both /workspace and /workspace/<any path>
+# The Vue SPA that served /workspace, /share/<token> and /intake/<token> has
+# been removed; the desk is the UI now. One public route survives, because
+# losing it would break a flow nobody chose to drop:
+#
+#   /invite/<token>  server-rendered accept page (www/invite.py). Without it
+#                    every invitation email points at a 404 and there is no way
+#                    to join a project at all.
 website_route_rules = [
-    {"from_route": "/workspace", "to_route": "workspace"},
-    {"from_route": "/workspace/<path:app_path>", "to_route": "workspace"},
-    # Public, view-only share links — served by the same SPA bundle. The SPA
-    # router resolves /share/:token and renders the chrome-less read-only page.
-    {"from_route": "/share/<path:app_path>", "to_route": "workspace"},
-    # Public intake forms — same shape, resolved by the SPA router's
-    # /intake/:token route (IntakeForm.vue). Without this entry the request
-    # never leaves Frappe's website-routing layer and 404s before reaching
-    # the SPA at all.
-    {"from_route": "/intake/<path:app_path>", "to_route": "workspace"},
+    {"from_route": "/invite/<path:app_path>", "to_route": "invite"},
 ]
+
+#
+# Removing /share and /intake is an outward-facing change, not just a cleanup —
+# those were PUBLIC, unauthenticated URLs. Any share link already handed to a
+# client, and any published intake form, stops resolving. The BP Share Link and
+# BP Intake Form doctypes and their whitelisted endpoints are left intact, so
+# the data and the API are still there; what is gone is the page that rendered
+# them. Rebuilding either on the desk would be new work, deliberately not done
+# here.
 
 # Fixtures for export — roles must match what board.py actually uses
 fixtures = [

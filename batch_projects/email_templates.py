@@ -18,6 +18,8 @@ Design language — quiet, typographic, product-notification style
 
 import frappe
 
+from batch_projects import desk_urls
+
 
 # ─── PALETTE ──────────────────────────────────────────────────────────────────
 
@@ -709,7 +711,9 @@ def _stat_panel(stats: list) -> str:
 
 def _task_row(t: dict, base_url: str) -> str:
     key   = frappe.db.get_value("BP Project", t.get("project"), "key") if t.get("project") else ""
-    turl  = (f"{base_url}/workspace/{key}/board?task={t.get('task_key', '')}" if key else base_url)
+    from batch_projects import desk_urls
+
+    turl  = desk_urls.task_url(t.get("project"), t.get("task_key"))
     tkey  = t.get("task_key") or ""
     title = t.get("title") or ""
     due   = t.get("due_date")
@@ -755,8 +759,10 @@ def build_digest_email(user_name: str, due_today: list, overdue: list,
         + _task_section("Due today",  due_today,  "#B54708", base_url)
         + _task_section("Your tasks", open_tasks, _MUTED,    base_url, limit=6)
     )
-    my_tasks_url = f"{base_url}/workspace/my-tasks"
-    manage_url   = f"{base_url}/workspace/account"
+    from batch_projects import desk_urls
+
+    my_tasks_url = desk_urls.my_tasks_url()
+    manage_url   = desk_urls.notification_settings_url()
 
     crumb = _breadcrumb([_brand_name(), "Daily digest"])
     body = (
@@ -794,7 +800,7 @@ def build_weekly_email(project_name: str, done: int, created: int,
         + f'</div>'
     )
     foot = _footer("Weekly project summary.",
-                   frappe.utils.get_url("/workspace/account"), "Manage preferences")
+                   desk_urls.notification_settings_url(), "Manage preferences")
     return _shell(crumb, body, foot, _ACCENT["Summary"])
 
 
@@ -834,5 +840,5 @@ def build_report_email(report_name: str, scope: str, period: str,
         + f'</div>'
     )
     foot = _footer("Scheduled report delivery.",
-                   frappe.utils.get_url("/workspace/account"), "Manage preferences")
+                   desk_urls.notification_settings_url(), "Manage preferences")
     return _shell(crumb, body, foot, _ACCENT["Summary"])

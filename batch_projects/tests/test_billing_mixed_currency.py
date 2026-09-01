@@ -1,15 +1,11 @@
 """Regression tests for explicit mixed-currency batch invoicing."""
 
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 import frappe
 
 from batch_projects.api import erp_link
-
-
-APP_ROOT = Path(__file__).resolve().parents[2]
 
 
 def project(
@@ -650,46 +646,6 @@ class TestBillingMixedCurrency(unittest.TestCase):
             entry["total_hours"],
             3.0,
         )
-
-    def test_batch_ui_requires_target_without_fake_mixed_total(self):
-        page = (
-            APP_ROOT
-            / "frontend"
-            / "src"
-            / "pages"
-            / "BatchInvoicing.vue"
-        ).read_text()
-
-        self.assertIn(
-            "Multiple currencies",
-            page,
-        )
-
-        self.assertIn(
-            "selectedCurrencyTotals(c)",
-            page,
-        )
-
-        self.assertIn(
-            'label="Invoice currency"',
-            page,
-        )
-
-        self.assertIn(
-            "confirm.mixed && !confirm.overrideCurrency.trim()",
-            page,
-        )
-
-        self.assertIn(
-            "currency: confirm.overrideCurrency.trim() || undefined",
-            page,
-        )
-
-        self.assertNotIn(
-            "busy === batchKey(c) || mixedSelected(c)",
-            page,
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://batchprojects.com">
-    <img src="frontend/public/images/bp-logo-new.png" alt="Projects Logo" width="80" height="80">
+    <img src="batch_projects/public/images/bp-logo-new.svg" alt="Projects Logo" width="80" height="80">
   </a>
 </p>
 
@@ -20,7 +20,6 @@
 ---
 
 <p align="center">
-  <img src="frontend/public/images/bp-hero.png" alt="Projects Board View" width="100%">
 </p>
 
 ## Overview
@@ -43,7 +42,7 @@ Experience the freedom of managing your projects in a fast, modern, and collabor
 * **Scalable and Performant by Design:** Horizontally scalable on standard Frappe workers, with list queries pushed down to SQL so large task volumes stay responsive.
 * **Enterprise Integrations:** Seamlessly connect with other enterprise tools and services for a unified workflow.
 * **Interactive Views:** Switch seamlessly between Kanban Boards, Backlogs, Sprints, and Gantt charts with saved view states.
-* **Fast Frontend:** Built on Vue 3 and Pinia for near-instant rendering and snappy interaction.
+* **No Separate App to Learn:** The UI is the Frappe desk itself — native Project/Task list, kanban and tree views — so it looks and behaves like the rest of ERPNext.
 * **Real-Time & Collaboration:** WebSocket-based multi-user sync for live updates across all connected clients.
 * **Projects Templates:** Create and reuse project templates with pre-defined tasks, workflows, and custom fields for faster project setup. Leverage templates to standardize processes and ensure consistency across projects.
 * **Fully Self-Hosted:** Runs inside your own bench with no licence check and no data leaving your infrastructure. An optional Go side-car can take over durable automation timers and the realtime broadcast plane; unconfigured, the app degrades cleanly to Frappe's own scheduler.
@@ -93,7 +92,7 @@ permission model inside Frappe.
 ## Quick Start (Core App)
 
 Projects runs as a standard Frappe app on **Frappe v16 / ERPNext v16**
-(Python 3.14+, Node 24+ for frontend development).
+(Python 3.14+).
 
 ```bash
 # Navigate to your bench directory
@@ -114,11 +113,10 @@ nothing to license. The `version-16` branch tracks ERPNext v16; see
 [`deploy/README.md`](deploy/README.md) for the full version-compatibility
 story and how branch naming maps to ERPNext versions going forward.
 
-For local frontend development, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Built with
 
-[Frappe Framework](https://frappeframework.com) · [ERPNext](https://erpnext.com) · [Vue 3](https://vuejs.org) · [Pinia](https://pinia.vuejs.org) · Python
+[Frappe Framework](https://frappeframework.com) · [ERPNext](https://erpnext.com) · Python
 
 ## Replacing ERPNext's stock Projects module
 
@@ -126,7 +124,7 @@ On ERPNext v16, installing Projects makes it the **default Projects
 experience**:
 
 * The stock `Project` and `Task` desk list views redirect into the
-  Projects SPA, so the BP project list is the default project list.
+  desk views, so the native Project list is the default project list.
 * Projects gets its own first-class v16 workspace sidebar.
 * ERPNext's own `Projects` sidebar is re-pointed at Projects on install
   and re-asserted after every `bench migrate`.
@@ -143,7 +141,7 @@ See [`deploy/README.md`](deploy/README.md) for the deployment guide.
 
 ## License
 
-Projects — the Frappe app and the Vue frontend, everything in this
+Projects — everything in this
 repo — is licensed under the **GNU Affero General Public License v3.0**
 (AGPL-3.0-only). See [`LICENSE`](LICENSE).
 

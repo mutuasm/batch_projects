@@ -96,6 +96,8 @@ jobs:
         with:
           python-version: "3.14"
 
+      # Node is for bench itself (frappe v16 requires >=24), not for this app —
+      # batch_projects ships no frontend of its own any more.
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -193,35 +195,3 @@ jobs:
         run: |
           bench --site "$SITE_NAME" set-config allow_tests true
           bench --site "$SITE_NAME" run-tests --app batch_projects
-
-  frontend-dist-drift:
-    name: Frontend dist matches source
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: yarn
-          cache-dependency-path: frontend/yarn.lock
-      - name: Install
-        working-directory: frontend
-        run: NODE_ENV=development yarn install --production=false --frozen-lockfile
-      - name: Preserve committed manifest
-        run: cp batch_projects/public/frontend/.vite/manifest.json /tmp/bp-vite-manifest-committed.json
-      - name: Build
-        working-directory: frontend
-        run: yarn build
-      - name: Verify Vite manifest
-        run: >-
-          python .github/scripts/compare_vite_manifests.py
-          /tmp/bp-vite-manifest-committed.json
-          batch_projects/public/frontend/.vite/manifest.json
-      - name: Fail if committed dist is stale
-        run: |
-          if ! git diff --exit-code -- . ':(exclude)batch_projects/public/frontend/.vite/manifest.json'; then
-            echo "::error::public/frontend/ doesn't match a fresh 'yarn build' of frontend/src." \
-                 "Run 'yarn build' inside frontend/ and commit the result in this PR."
-            exit 1
-          fi

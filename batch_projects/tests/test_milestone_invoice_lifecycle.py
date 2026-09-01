@@ -1,15 +1,11 @@
 """Regression tests for BP Milestone ↔ Sales Invoice lifecycle."""
 
 import unittest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import frappe
 
 from batch_projects import milestone_billing
-
-
-APP_ROOT = Path(__file__).resolve().parents[2]
 
 
 def milestone_row(
@@ -568,51 +564,6 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
             db.set_value.call_count,
             1,
         )
-
-    def test_project_summary_treats_new_invoice_as_draft(self):
-        page = (
-            APP_ROOT
-            / "frontend"
-            / "src"
-            / "pages"
-            / "ProjectSummary.vue"
-        ).read_text()
-
-        self.assertIn(
-            "m.invoice_status = res.invoice_status || 'Draft'",
-            page,
-        )
-
-        self.assertIn(
-            "m.invoice_status === 'Not Invoiced'",
-            page,
-        )
-
-        self.assertIn(
-            "m.invoice_status === 'Draft'",
-            page,
-        )
-
-        self.assertIn(
-            "@click=\"openMilestoneInvoice(m)\"",
-            page,
-        )
-
-        self.assertIn(
-            "function openMilestoneInvoice(m)",
-            page,
-        )
-
-        self.assertNotIn(
-            "@click=\"window.open(",
-            page,
-        )
-
-        self.assertNotIn(
-            "m.invoice_status = 'Invoiced'",
-            page,
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

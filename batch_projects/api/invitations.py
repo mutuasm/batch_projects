@@ -29,7 +29,12 @@ def _normalize_email(email: str) -> str:
 
 
 def _accept_url(token: str) -> str:
-    return get_url(f"/workspace/invite/{token}")
+    """The link that goes in the invitation email.
+
+    Served by www/invite.py now, not the SPA — see the website_route_rules note
+    in hooks.py for why this one public route outlived the others.
+    """
+    return get_url(f"/invite/{token}")
 
 
 def _is_member(project: str, user: str) -> bool:

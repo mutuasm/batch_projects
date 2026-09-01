@@ -2,16 +2,12 @@
 
 import inspect
 import unittest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import frappe
 
 from batch_projects import billing_reservation
 from batch_projects.api import erp_link
-
-
-APP_ROOT = Path(__file__).resolve().parents[2]
 
 
 def candidate(
@@ -395,21 +391,6 @@ class TestBillingPreviewParity(unittest.TestCase):
             ),
             12.34,
         )
-
-    def test_batch_success_toast_uses_payable_total(self):
-        page = (
-            APP_ROOT
-            / "frontend"
-            / "src"
-            / "pages"
-            / "BatchInvoicing.vue"
-        ).read_text()
-
-        self.assertIn(
-            "res.payable_total ?? res.grand_total",
-            page,
-        )
-
 
 if __name__ == "__main__":
     unittest.main()
