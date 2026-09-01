@@ -94,6 +94,8 @@ import uuid
 import time
 from frappe.model.document import Document
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 # Max chained automations (rule → save → event → rule …) before we stop,
 # so a self-referential rule can never loop forever.
@@ -528,11 +530,11 @@ def _run_relative_schedule(rule):
     any_failed = False
     for project in projects:
         try:
-            completed = set(frappe.get_cached_doc("BP Project", project).get_completed_statuses())
+            completed = set(frappe.get_cached_doc(PROJECT(), project).get_completed_statuses())
         except Exception:
             completed = set()
         tasks = frappe.get_all(
-            "BP Task", filters={"project": project, field: str(target)},
+            TASK(), filters={"project": project, field: str(target)},
             fields=["name", "task_key", "status"],
         )
         for t in tasks:
@@ -576,8 +578,8 @@ def _projects_in_scope(rule) -> list:
     if rule.scope == "workspace":
         pf = _parse(rule.project_filter) or []
         if pf:
-            return [p for p in pf if frappe.db.exists("BP Project", p)]
-        return frappe.get_all("BP Project", pluck="name")
+            return [p for p in pf if frappe.db.exists(PROJECT(), p)]
+        return frappe.get_all(PROJECT(), pluck="name")
     return [rule.project] if rule.project else []
 
 
@@ -818,8 +820,8 @@ def _build_context(payload: dict) -> dict:
         "_payload": payload,
     }
     task_name = payload.get("task")
-    if task_name and frappe.db.exists("BP Task", task_name):
-        ctx["_task"] = frappe.get_doc("BP Task", task_name)
+    if task_name and frappe.db.exists(TASK(), task_name):
+        ctx["_task"] = frappe.get_doc(TASK(), task_name)
     return ctx
 
 
@@ -1152,7 +1154,7 @@ def _create_linked_issue(cfg, payload, trigger_task):
         try:
             from batch_projects.api.board import _normalize_workflow_states
             states = _normalize_workflow_states(
-                frappe.get_cached_doc("BP Project", project).get_workflow_states())
+                frappe.get_cached_doc(PROJECT(), project).get_workflow_states())
             status = states[0].get("name") if states else None
         except Exception:
             status = None
