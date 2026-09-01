@@ -14,13 +14,15 @@ from __future__ import annotations
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 TASK_TRASHED = "task.trashed"
 TASK_RESTORED = "task.restored"
 
 
 def _manager_task(issue: str):
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     from batch_projects import access
     access.require(doc.project, "Manager")
     return doc
@@ -114,13 +116,13 @@ def _stop_active_timers(doc, deleted_on) -> list[str]:
 
 
 def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     if doc.is_deleted:
         return []
 
     changed = []
     children = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"parent_task": issue, "is_deleted": 0},
         pluck="name",
     )
@@ -133,7 +135,7 @@ def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
 
     users = _assignees(doc.name)
     frappe.db.set_value(
-        "BP Task",
+        TASK(),
         doc.name,
         {
             "is_deleted": 1,
@@ -148,7 +150,7 @@ def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
 
 
 def _restore_tree(issue: str, cascade_stamp) -> list[str]:
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     if not doc.is_deleted:
         return []
 
@@ -156,7 +158,7 @@ def _restore_tree(issue: str, cascade_stamp) -> list[str]:
     # Restore only descendants deleted by the exact same cascade. A child with
     # an older independent deletion timestamp remains in trash.
     children = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={
             "parent_task": issue,
             "is_deleted": 1,
@@ -166,7 +168,7 @@ def _restore_tree(issue: str, cascade_stamp) -> list[str]:
     )
 
     frappe.db.set_value(
-        "BP Task",
+        TASK(),
         doc.name,
         {"is_deleted": 0, "deleted_on": None, "deleted_by": None},
         update_modified=False,

@@ -23,6 +23,8 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime, add_days, get_url, get_datetime
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects import access
 from batch_projects.api.board import _normalize_workflow_states, _parse_json
 
@@ -33,9 +35,9 @@ VALID_SCOPES = {"board", "project", "task"}
 
 def _resolve_project(project: str) -> str:
     """Accept either the project name or its short key."""
-    if frappe.db.exists("BP Project", project):
+    if frappe.db.exists(PROJECT(), project):
         return project
-    alt = frappe.db.get_value("BP Project", {"key": project}, "name")
+    alt = frappe.db.get_value(PROJECT(), {"key": project}, "name")
     if not alt:
         frappe.throw(_("Project not found."), frappe.DoesNotExistError)
     return alt
@@ -75,9 +77,9 @@ def create_share_link(project, scope="board", task=None, expires_in_days=None, l
 
     scope = scope if scope in VALID_SCOPES else "board"
     if scope == "task":
-        if not task or not frappe.db.exists("BP Task", task):
+        if not task or not frappe.db.exists(TASK(), task):
             frappe.throw(_("A valid task is required for a task share link."))
-        if frappe.db.get_value("BP Task", task, "project") != project:
+        if frappe.db.get_value(TASK(), task, "project") != project:
             frappe.throw(_("That task does not belong to this project."))
 
     # Validate access_level
@@ -203,11 +205,11 @@ def _assignees_for(task_names):
 def _read_board(project):
     """Self-contained read-only board payload. Bypasses session permissions on
     purpose — the share token already authorized this read."""
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
     states = _normalize_workflow_states(proj.get_workflow_states())
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"project": project, "parent_task": ["is", "not set"], "is_deleted": 0},
         fields=["name", "task_key", "title", "status", "priority", "task_type",
                 "due_date", "board_order", "labels"],
@@ -234,13 +236,13 @@ def _read_board(project):
 
 
 def _read_task(task_name):
-    t = frappe.get_doc("BP Task", task_name)
-    proj = frappe.get_doc("BP Project", t.project)
+    t = frappe.get_doc(TASK(), task_name)
+    proj = frappe.get_doc(PROJECT(), t.project)
     states = _normalize_workflow_states(proj.get_workflow_states())
     color_by_status = {s.get("name"): s.get("color") for s in states}
 
     subtasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"parent_task": task_name, "is_deleted": 0},
         fields=["name", "task_key", "title", "status", "priority"],
         order_by="board_order asc, creation asc",
@@ -321,7 +323,7 @@ def get_shared(token):
             "label": link.label or ""}
 
     if link.scope == "task":
-        if not link.task or not frappe.db.exists("BP Task", link.task):
+        if not link.task or not frappe.db.exists(TASK(), link.task):
             frappe.throw(_("The shared task no longer exists."), frappe.DoesNotExistError)
         base.update(_read_task(link.task))
     else:
@@ -367,11 +369,11 @@ def add_guest_comment(token, comment_text, guest_name=None):
         frappe.throw(_("Comments are only supported on a shared task."), frappe.PermissionError)
     if link.access_level != "comment":
         frappe.throw(_("This link does not allow commenting."), frappe.PermissionError)
-    if not link.task or not frappe.db.exists("BP Task", link.task):
+    if not link.task or not frappe.db.exists(TASK(), link.task):
         frappe.throw(_("The shared task no longer exists."), frappe.DoesNotExistError)
 
     # Trash is a durable boundary: comments on trashed tasks are rejected.
-    task_data = frappe.db.get_value("BP Task", link.task, ["is_deleted"], as_dict=True)
+    task_data = frappe.db.get_value(TASK(), link.task, ["is_deleted"], as_dict=True)
     if not task_data or task_data.is_deleted:
         frappe.throw(_("The shared task has been trashed."), frappe.PermissionError)
 
@@ -382,7 +384,7 @@ def add_guest_comment(token, comment_text, guest_name=None):
 
     _throttle_guest_comment(token)
 
-    doc = frappe.get_doc("BP Task", link.task)
+    doc = frappe.get_doc(TASK(), link.task)
     activity = frappe.get_doc({
         "doctype": "BP Activity",
         "task": link.task,
@@ -434,11 +436,11 @@ def update_shared_task(token, task, fields=None):
         frappe.throw(_("Task edits are only supported on a shared task."), frappe.PermissionError)
     if link.access_level != "edit":
         frappe.throw(_("This link does not allow editing."), frappe.PermissionError)
-    if not link.task or not frappe.db.exists("BP Task", link.task):
+    if not link.task or not frappe.db.exists(TASK(), link.task):
         frappe.throw(_("The shared task no longer exists."), frappe.DoesNotExistError)
 
     # Trash is a durable boundary: edits on trashed tasks are rejected.
-    task_data = frappe.db.get_value("BP Task", link.task, ["is_deleted"], as_dict=True)
+    task_data = frappe.db.get_value(TASK(), link.task, ["is_deleted"], as_dict=True)
     if not task_data or task_data.is_deleted:
         frappe.throw(_("The shared task has been trashed."), frappe.PermissionError)
 
@@ -462,7 +464,7 @@ def update_shared_task(token, task, fields=None):
     # Throttle (same as guest comments)
     _throttle_guest_comment(token)
 
-    doc = frappe.get_doc("BP Task", link.task)
+    doc = frappe.get_doc(TASK(), link.task)
 
     # Same dependency-blocker guard update_task applies (api/board.py's
     # _completing_into_blocked). Without it a share-link guest could close a

@@ -11,6 +11,8 @@ tab's unbilled-timesheet logic in erp_link.py).
 
 import frappe
 from frappe.utils import flt, get_datetime, now_datetime, time_diff_in_hours
+
+from batch_projects.doctypes import PROJECT, TASK
 from erpnext.projects.doctype.timesheet.timesheet import get_activity_cost
 
 from batch_projects.api.board import _check_task_permission, _require_system_user
@@ -36,7 +38,7 @@ def get_active_timer():
         return None
 
     task = frappe.db.get_value(
-        "BP Task", row.task, ["name", "task_key", "title", "project", "is_deleted"], as_dict=True
+        TASK(), row.task, ["name", "task_key", "title", "project", "is_deleted"], as_dict=True
     )
     if not task or task.is_deleted:
         _stop(row.name)
@@ -59,7 +61,7 @@ def start_timer(task):
     logged, exactly like an explicit stop_timer() call."""
     _require_system_user()
 
-    task_doc = frappe.get_doc("BP Task", task)
+    task_doc = frappe.get_doc(TASK(), task)
     _check_task_permission(task, task_doc.project, "BP Member")
     if task_doc.is_deleted:
         frappe.throw("This task has been deleted. Restore it before timing work against it.")
@@ -208,7 +210,7 @@ def _append_time_log(task, user, from_time, to_time, hours, description=None):
     user's draft timesheet. Shared by the running-timer stop path and
     manual time entry (`log_time`) — both need the identical rate/costing
     resolution, and duplicating it was how these two paths would drift."""
-    proj = frappe.get_doc("BP Project", task.project)
+    proj = frappe.get_doc(PROJECT(), task.project)
     if not proj.erpnext_project:
         frappe.throw(
             f"Link '{proj.project_name}' to an ERPNext Project before tracking time on it."
@@ -299,7 +301,7 @@ def _stop(active_timer_name):
     task_name = row.task
 
     task_row = frappe.db.get_value(
-        "BP Task", task_name, ["is_deleted", "deleted_on"], as_dict=True
+        TASK(), task_name, ["is_deleted", "deleted_on"], as_dict=True
     )
     if not task_row:
         frappe.delete_doc("BP Active Timer", active_timer_name, ignore_permissions=True)
@@ -324,7 +326,7 @@ def _stop(active_timer_name):
     if elapsed_hours <= 0:
         return None
 
-    task = frappe.get_doc("BP Task", task_name)
+    task = frappe.get_doc(TASK(), task_name)
     return _append_time_log(task, user, started_at, to_time, elapsed_hours)
 
 
@@ -341,7 +343,7 @@ def log_time(task, hours, date=None, description=None):
     if hours <= 0:
         frappe.throw("Hours must be greater than zero.")
 
-    task_doc = frappe.get_doc("BP Task", task)
+    task_doc = frappe.get_doc(TASK(), task)
     _check_task_permission(task, task_doc.project, "BP Member")
     if task_doc.is_deleted:
         frappe.throw("This task has been deleted. Restore it before logging time against it.")
@@ -372,7 +374,7 @@ def _get_editable_time_log(time_log_name):
 
     task_name = row.custom_bp_task
     if task_name:
-        task_project = frappe.db.get_value("BP Task", task_name, "project")
+        task_project = frappe.db.get_value(TASK(), task_name, "project")
         if task_project:
             _check_task_permission(task_name, task_project, "BP Member")
     elif ts.owner != frappe.session.user and "System Manager" not in frappe.get_roles():
@@ -385,7 +387,7 @@ def list_time_entries(task):
     """Time log rows for a task — the read side of manual correction (edit/
     delete act on the `name` this returns)."""
     _require_system_user()
-    task_doc = frappe.get_doc("BP Task", task)
+    task_doc = frappe.get_doc(TASK(), task)
     _check_task_permission(task, task_doc.project, "BP Viewer")
 
     rows = frappe.get_all(
@@ -478,7 +480,7 @@ def send_timer_reminders():
         if not row.task or _reminder_sent_today(row.user, row.task, "Timer Reminder"):
             continue
         task = frappe.db.get_value(
-            "BP Task", row.task, ["task_key", "title", "project", "is_deleted"], as_dict=True
+            TASK(), row.task, ["task_key", "title", "project", "is_deleted"], as_dict=True
         )
         if not task or task.is_deleted:
             continue

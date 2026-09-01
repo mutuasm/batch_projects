@@ -12,6 +12,8 @@ from datetime import date, datetime, timedelta
 
 import frappe
 
+from batch_projects.doctypes import PROJECT, TASK
+
 
 def _check(project: str, role: str = "BP Viewer") -> None:
     from batch_projects.api.board import _check_permission
@@ -22,11 +24,11 @@ def _check(project: str, role: str = "BP Viewer") -> None:
 def get_milestone_report(milestone):
     m = frappe.get_doc("BP Milestone", milestone)
     _check(m.project)
-    proj = frappe.get_doc("BP Project", m.project)
+    proj = frappe.get_doc(PROJECT(), m.project)
     completed = set(proj.get_completed_statuses())
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"milestone": milestone, "project": m.project, "is_deleted": 0},
         fields=[
             "name", "task_key", "title", "status", "story_points",
@@ -90,7 +92,7 @@ def get_sprint_capacity(sprint):
     _check(doc.project)
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"sprint": sprint, "project": doc.project, "is_deleted": 0},
         fields=["name", "estimated_hours"],
     )
@@ -151,12 +153,12 @@ def _resolve_report_projects(project):
     if requested is None:
         from batch_projects.permissions import get_accessible_projects
         accessible = get_accessible_projects(frappe.session.user)
-        return frappe.get_all("BP Project", pluck="name") if accessible is None else list(accessible)
+        return frappe.get_all(PROJECT(), pluck="name") if accessible is None else list(accessible)
 
     resolved = []
     for value in requested:
-        name = value if frappe.db.exists("BP Project", value) else frappe.db.get_value(
-            "BP Project", {"key": value}, "name"
+        name = value if frappe.db.exists(PROJECT(), value) else frappe.db.get_value(
+            PROJECT(), {"key": value}, "name"
         )
         if name:
             _check(name)
@@ -190,7 +192,7 @@ def get_reports(project, period="last_30_days", from_date=None, to_date=None):
 
     states, completed, seen_states = [], set(), set()
     for name in projects:
-        pdoc = frappe.get_cached_doc("BP Project", name)
+        pdoc = frappe.get_cached_doc(PROJECT(), name)
         for state in _normalize_workflow_states(pdoc.get_workflow_states()):
             state_name = state.get("name")
             if state_name and state_name not in seen_states:
@@ -214,7 +216,7 @@ def get_reports(project, period="last_30_days", from_date=None, to_date=None):
         from_date, to_date = today - timedelta(days=30), today
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"project": project_filter, "is_deleted": 0},
         fields=[
             "name", "status", "story_points", "sprint", "started_on",
