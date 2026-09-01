@@ -487,6 +487,32 @@ def dry_run_native_migration():
         if collisions:
             report["collisions"][bp_doctype] = sorted(collisions)[:20]
 
+    # Child rows are the quiet one: nothing errors if they are left behind, the
+    # native parent simply has an empty child table.
+    report["child_rows"] = {"tables": 0, "rows": 0, "detail": []}
+    for (bp_parenttype, bp_parentfield), _ in _CHILD_TABLES.items():
+        child = _CHILD_DOCTYPE[(bp_parenttype, bp_parentfield)]
+        anchor, _unused = _ANCHOR[bp_parenttype]
+        if not frappe.db.exists("DocType", child):
+            continue
+        try:
+            pending = frappe.db.sql(
+                f"""
+                SELECT count(*)
+                  FROM `tab{child}` c
+                  JOIN `tab{bp_parenttype}` bp ON c.`parent` = bp.`name`
+                 WHERE c.`parenttype` = %s AND c.`parentfield` = %s
+                   AND bp.`{anchor}` is not null AND bp.`{anchor}` != ''
+                """,
+                (bp_parenttype, bp_parentfield),
+            )[0][0]
+        except Exception:
+            continue
+        report["child_rows"]["tables"] += 1
+        if pending:
+            report["child_rows"]["rows"] += pending
+            report["child_rows"]["detail"].append({"doctype": child, "rows": pending})
+
     for doctype, fieldname, bp_doctype in _satellite_link_fields():
         anchor_field, _ = _ANCHOR[bp_doctype]
         try:
@@ -509,3 +535,95 @@ def dry_run_native_migration():
             )
 
     return report
+
+
+# ─── CHILD TABLE RE-PARENTING ────────────────────────────────────────────────
+#
+# Child rows do not move with their parent. A BP Task Assignee row carries
+# parent = <BP Task name>, parenttype = "BP Task", parentfield = "assignees";
+# after the migration the native Task exists but the row still points at the BP
+# record, and `custom_assignees` on the native Task is empty.
+#
+# retarget_satellite_links() does not cover this — it rewrites Link *fields*,
+# and parent/parenttype/parentfield are none of those. So without this step a
+# cutover silently loses every assignee, task link, task reference, project
+# member and per-project custom field: the parents migrate, the children are
+# orphaned, and nothing errors because an empty child table is perfectly valid.
+#
+# (bp parenttype, bp parentfield) -> (native parenttype, native parentfield)
+_CHILD_TABLES = {
+    ("BP Task", "assignees"): ("Task", "custom_assignees"),
+    ("BP Task", "links"): ("Task", "custom_links"),
+    ("BP Task", "references"): ("Task", "custom_references"),
+    ("BP Project", "members"): ("Project", "custom_members"),
+    ("BP Project", "custom_field_links"): ("Project", "custom_custom_field_links"),
+}
+
+# The child doctype each pair lives in.
+_CHILD_DOCTYPE = {
+    ("BP Task", "assignees"): "BP Task Assignee",
+    ("BP Task", "links"): "BP Task Link",
+    ("BP Task", "references"): "BP Task Reference",
+    ("BP Project", "members"): "BP Project Member",
+    ("BP Project", "custom_field_links"): "BP Custom Field Project",
+}
+
+
+def retarget_child_tables():
+    """Re-parent child rows from the BP records onto their native counterparts.
+
+    Idempotent and never raises — this runs from a patch. A row is only moved
+    when its BP parent has a mapping anchor, so a re-run finds nothing left to
+    do (the rows now carry the native parenttype and no longer match).
+    """
+    stats = {"moved": 0, "tables": 0, "failed": 0, "skipped_collision": []}
+
+    for bp_doctype in _RETIRING_DOCTYPES:
+        if _name_collisions(bp_doctype):
+            stats["skipped_collision"].append(bp_doctype)
+
+    for (bp_parenttype, bp_parentfield), (native_parenttype, native_parentfield) in _CHILD_TABLES.items():
+        if bp_parenttype in stats["skipped_collision"]:
+            continue
+        child = _CHILD_DOCTYPE[(bp_parenttype, bp_parentfield)]
+        anchor, _ = _ANCHOR[bp_parenttype]
+        if not frappe.db.exists("DocType", child):
+            continue
+        try:
+            pending = frappe.db.sql(
+                f"""
+                SELECT count(*)
+                  FROM `tab{child}` c
+                  JOIN `tab{bp_parenttype}` bp ON c.`parent` = bp.`name`
+                 WHERE c.`parenttype` = %s
+                   AND c.`parentfield` = %s
+                   AND bp.`{anchor}` is not null AND bp.`{anchor}` != ''
+                """,
+                (bp_parenttype, bp_parentfield),
+            )[0][0]
+            if pending:
+                frappe.db.sql(
+                    f"""
+                    UPDATE `tab{child}` c
+                      JOIN `tab{bp_parenttype}` bp ON c.`parent` = bp.`name`
+                       SET c.`parent` = bp.`{anchor}`,
+                           c.`parenttype` = %s,
+                           c.`parentfield` = %s
+                     WHERE c.`parenttype` = %s
+                       AND c.`parentfield` = %s
+                       AND bp.`{anchor}` is not null AND bp.`{anchor}` != ''
+                    """,
+                    (native_parenttype, native_parentfield, bp_parenttype, bp_parentfield),
+                )
+            stats["moved"] += pending
+            stats["tables"] += 1
+        except Exception:
+            stats["failed"] += 1
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"native migration: re-parent {child} ({bp_parenttype}.{bp_parentfield})",
+            )
+
+    frappe.db.commit()
+    frappe.logger("batch_projects").info(f"child table re-parent: {stats}")
+    return stats
