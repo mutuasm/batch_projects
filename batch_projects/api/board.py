@@ -1,4 +1,6 @@
 import frappe
+
+from batch_projects.doctypes import PROJECT, TASK, task_field
 import json
 import re
 
@@ -161,7 +163,7 @@ _VALID_TRANSITION_MIN_ROLES = ("Manager", "Admin")
 def _active_task_field_values(project, field) -> set[str]:
     """Distinct non-empty values of `field` currently in use by live tasks."""
     rows = frappe.get_all(
-        "BP Task", filters=_task_filters({"project": project}), pluck=field
+        TASK(), filters=_task_filters({"project": project}), pluck=field
     )
     return {str(v) for v in rows if v not in (None, "")}
 
@@ -179,7 +181,7 @@ def _active_task_labels(project) -> set[str]:
     disappear."""
     used = set()
     for row in frappe.get_all(
-        "BP Task", filters=_task_filters({"project": project}), fields=["name", "labels"]
+        TASK(), filters=_task_filters({"project": project}), fields=["name", "labels"]
     ):
         raw = row.get("labels")
         if not raw:
@@ -417,7 +419,7 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
         kwargs["limit"] = int(limit)
         kwargs["start"] = int(offset)
 
-    issues = frappe.get_all("BP Task", **kwargs)
+    issues = frappe.get_all(TASK(), **kwargs)
 
     # ── Post-fetch: assignees ─────────────────────────────────────────────────
     issue_names = [i["name"] for i in issues]
@@ -427,7 +429,7 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
 
     # ── Post-fetch: sub_tasks (single batch query, not N+1) ──────────────────
     subtasks_raw = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"parent_task": ["in", issue_names], "is_deleted": 0},
         fields=["name", "task_key", "title", "status", "priority",
                 "task_type", "due_date", "parent_task"],
@@ -499,7 +501,7 @@ def _group_issues(project, issues, group_by):
     groups = {}
 
     if group_by == "status":
-        proj = frappe.get_doc("BP Project", project)
+        proj = frappe.get_doc(PROJECT(), project)
         ordered_keys = [s["name"] for s in _normalize_workflow_states(proj.get_workflow_states())]
         for key in ordered_keys:
             groups[key] = []
@@ -567,7 +569,7 @@ def get_projects():
         filters["name"] = ["in", list(accessible)]
 
     projects = frappe.get_all(
-        "BP Project",
+        PROJECT(),
         filters=filters,
         fields=[
             "name", "project_name", "key", "status", "lead",
@@ -622,7 +624,7 @@ def get_projects():
 @frappe.whitelist()
 def get_project(project):
     _check_permission(project, "BP Viewer")
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     data = doc.as_dict()
     data["workflow_states"] = _normalize_workflow_states(doc.get_workflow_states())
     data["issue_types"]     = doc.get_issue_types()
@@ -670,10 +672,10 @@ def update_project_general(project, project_name=None, key=None, description=Non
     ):
         _check_permission(project, "BP Manager")
 
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
 
     # Read current values so we can return the final state
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
 
     changes = {}
 
@@ -688,7 +690,7 @@ def update_project_general(project, project_name=None, key=None, description=Non
         if not key:
             frappe.throw("Project key cannot be empty.")
         if key != doc.key:
-            if frappe.db.exists("BP Project", {"key": key, "name": ["!=", project]}):
+            if frappe.db.exists(PROJECT(), {"key": key, "name": ["!=", project]}):
                 frappe.throw(f"Project key '{key}' is already in use.")
         changes["key"] = key
 
@@ -733,7 +735,7 @@ def update_project_general(project, project_name=None, key=None, description=Non
 
     if changes:
         # set_value does a targeted SQL UPDATE — bypasses child-table validation
-        frappe.db.set_value("BP Project", project, changes)
+        frappe.db.set_value(PROJECT(), project, changes)
         frappe.db.commit()
         # Reflect changes onto doc for return value
         for k, v in changes.items():
@@ -809,14 +811,14 @@ def purge_project(project, confirm_key=None):
         )
 
     # Name must be typed back, same as any irreversible destructive action.
-    key = frappe.db.get_value("BP Project", project, "project_name") or project
+    key = frappe.db.get_value(PROJECT(), project, "project_name") or project
     if (confirm_key or "").strip() != key:
         frappe.throw(
             f'Type the project name ("{key}") to confirm permanent deletion.',
             frappe.ValidationError, title="Confirmation required",
         )
 
-    frappe.delete_doc("BP Project", project, force=True, ignore_permissions=True,
+    frappe.delete_doc(PROJECT(), project, force=True, ignore_permissions=True,
                       delete_permanently=True)
     frappe.db.commit()
     access.invalidate_archived_cache(project)
@@ -841,7 +843,7 @@ def _project_financial_blockers(project) -> list:
     except Exception:
         erp_project = None
 
-    task_names = frappe.get_all("BP Task", filters={"project": project}, pluck="name")
+    task_names = frappe.get_all(TASK(), filters={"project": project}, pluck="name")
     if task_names:
         n = frappe.db.count("Timesheet Detail", {"custom_bp_task": ["in", task_names]})
         if n:
@@ -882,7 +884,7 @@ def update_project_custom_field_values(project, values):
         values = json.loads(values)
 
     _custom_fields.assert_can_edit_field_values(project, values)
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     existing = _parse_json(doc.custom_field_values, {})
     existing.update(values)
     schema = _custom_fields.validation_schema_for_project(project, "projects")
@@ -915,7 +917,7 @@ def update_project_workflow(project, workflow_states):
     _assert_no_duplicate_names([s["name"] for s in states], "workflow state")
 
     existing_raw = _deep_parse_json(
-        frappe.db.get_value("BP Project", project, "workflow_states") or "[]"
+        frappe.db.get_value(PROJECT(), project, "workflow_states") or "[]"
     )
     existing = existing_raw if isinstance(existing_raw, list) else []
     old_by_name = {
@@ -954,9 +956,9 @@ def update_project_workflow(project, workflow_states):
             s["allowed_to"] = cleaned
         else:
             s.pop("allowed_to", None)
-    frappe.db.set_value("BP Project", project, {
+    frappe.db.set_value(PROJECT(), project, {
         "workflow_states": json.dumps(states),
-        "schema_version": (frappe.db.get_value("BP Project", project, "schema_version") or 0) + 1,
+        "schema_version": (frappe.db.get_value(PROJECT(), project, "schema_version") or 0) + 1,
         "modified": frappe.utils.now(),
     })
     frappe.db.commit()
@@ -983,7 +985,7 @@ def update_project_issue_types(project, issue_types):
     _assert_no_duplicate_names([t["name"] for t in clean], "task type")
 
     existing_raw = _deep_parse_json(
-        frappe.db.get_value("BP Project", project, "issue_types") or "[]"
+        frappe.db.get_value(PROJECT(), project, "issue_types") or "[]"
     )
     existing = existing_raw if isinstance(existing_raw, list) else []
     old_names = {t.get("name") for t in existing if isinstance(t, dict) and t.get("name")}
@@ -992,7 +994,7 @@ def update_project_issue_types(project, issue_types):
         old_names - new_names, _active_task_field_values(project, "task_type"), "task type"
     )
 
-    frappe.db.set_value("BP Project", project, {
+    frappe.db.set_value(PROJECT(), project, {
         "issue_types": json.dumps(clean),
         "modified": frappe.utils.now(),
     })
@@ -1009,7 +1011,7 @@ def update_project_labels(project, labels):
     incoming = _normalize_project_labels(labels_list)
 
     existing_raw = _deep_parse_json(
-        frappe.db.get_value("BP Project", project, "labels") or "[]"
+        frappe.db.get_value(PROJECT(), project, "labels") or "[]"
     )
     if not isinstance(existing_raw, list):
         frappe.throw(
@@ -1061,7 +1063,7 @@ def update_project_labels(project, labels):
             title="Label is still in use",
         )
 
-    frappe.db.set_value("BP Project", project, {
+    frappe.db.set_value(PROJECT(), project, {
         "labels": json.dumps(incoming),
         "modified": frappe.utils.now(),
     })
@@ -1096,20 +1098,20 @@ def get_gantt(project):
     window, status colour, and the real finish-to-start dependency edges derived
     from BP Task Link (`blocks` / `is blocked by`). One round trip, no N+1."""
     # Accept either the project name or its short key (the UI route uses the key).
-    if not frappe.db.exists("BP Project", project):
-        alt = frappe.db.get_value("BP Project", {"key": project}, "name")
+    if not frappe.db.exists(PROJECT(), project):
+        alt = frappe.db.get_value(PROJECT(), {"key": project}, "name")
         if alt:
             project = alt
     _check_permission(project, "BP Viewer")
     from batch_projects.entitlements import require_workspace_feature
     require_workspace_feature("gantt")
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
     states = _normalize_workflow_states(proj.get_workflow_states())
     color_by_status = {s.get("name"): s.get("color") for s in states}
     completed = set(proj.get_completed_statuses())
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters=_task_filters({"project": project}),
         fields=[
             "name", "task_key", "title", "status", "priority", "task_type",
@@ -1227,7 +1229,7 @@ def get_board(project, show_child_issues=False):
         if cached is not None:
             return cached
 
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
     states = _normalize_workflow_states(proj.get_workflow_states())
 
     board_filters = {} if frappe.parse_json(show_child_issues) else {"parent_task": None}
@@ -1346,7 +1348,7 @@ def _completing_into_blocked(doc, new_status, force):
     every status change (board drag, list, sidebar, subtask) flows through it."""
     if force:
         return None
-    proj = frappe.get_cached_doc("BP Project", doc.project)
+    proj = frappe.get_cached_doc(PROJECT(), doc.project)
     completed = set(proj.get_completed_statuses())
     if new_status not in completed or doc.status in completed:
         return None
@@ -1356,7 +1358,7 @@ def _completing_into_blocked(doc, new_status, force):
         return None
     blockers = [
         b for b in frappe.get_all(
-            "BP Task", filters={"name": ["in", blocker_names]},
+            TASK(), filters={"name": ["in", blocker_names]},
             fields=["name", "task_key", "title", "status"],
         )
         if b["status"] not in completed
@@ -1367,7 +1369,7 @@ def _completing_into_blocked(doc, new_status, force):
 @frappe.whitelist()
 def update_task_status(issue, status, board_order=None, force=False):
     from batch_projects.cache import invalidate_project
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Member")
     blockers = _completing_into_blocked(doc, status, _as_bool(force))
     if blockers:
@@ -1415,7 +1417,7 @@ def move_task(issue, status=None, prev=None, next=None, force=False):
         next = None
 
     def _rank(name):
-        return frappe.db.get_value("BP Task", name, "board_rank") if name else None
+        return frappe.db.get_value(TASK(), name, "board_rank") if name else None
 
     with rankutil.column_lock(doc.project, target_status):
         r = rankutil.rank_between(_rank(prev), _rank(next))
@@ -1446,7 +1448,7 @@ def move_task(issue, status=None, prev=None, next=None, force=False):
 @frappe.whitelist()
 def request_approval(issue, approver):
     """Set a task as pending approval by a specific user."""
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Member")
     if not approver or not frappe.db.exists("User", approver):
         frappe.throw("Approver is required.")
@@ -1538,7 +1540,7 @@ def reject_task(issue, reason=None):
 
 @frappe.whitelist()
 def get_task(issue):
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     if doc.is_deleted:
         frappe.throw("Task has been trashed.", frappe.PermissionError)
     _check_task_permission(issue, doc.project, "BP Viewer")
@@ -1580,7 +1582,7 @@ def get_task(issue):
     live = {}
     if link_names:
         for t in frappe.get_all(
-            "BP Task",
+            TASK(),
             filters={"name": ["in", link_names]},
             fields=["name", "task_key", "title", "status", "project"],
         ):
@@ -1621,7 +1623,7 @@ def get_task(issue):
 
     # Subtasks
     subtasks_raw = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"parent_task": issue},
         fields=["name", "task_key", "title", "status", "priority", "task_type"],
         order_by="creation asc",
@@ -1658,7 +1660,7 @@ def get_task(issue):
     if access.has_capability(doc.project, "view_files"):
         data["attachments"] = frappe.get_all(
             "File",
-            filters={"attached_to_doctype": "BP Task", "attached_to_name": issue},
+            filters={"attached_to_doctype": TASK(), "attached_to_name": issue},
             fields=["name", "file_name", "file_url", "file_size", "is_private", "creation"],
             order_by="creation asc",
         )
@@ -1696,12 +1698,12 @@ def create_task(project, title, status=None, priority="Medium", task_type="Task"
         _validate_custom_field_values(custom_field_values, schema)
 
     if not status:
-        proj = frappe.get_doc("BP Project", project)
+        proj = frappe.get_doc(PROJECT(), project)
         states = _normalize_workflow_states(proj.get_workflow_states())
         status = states[0]["name"] if states else "To Do"
 
     doc = frappe.get_doc({
-        "doctype": "BP Task",
+        "doctype": TASK(),
         "project": project,
         "title": title,
         "status": status,
@@ -1867,7 +1869,7 @@ def bulk_update_tasks(issues, fields):
 
     for issue in issues:
         try:
-            doc = frappe.get_doc("BP Task", issue)
+            doc = frappe.get_doc(TASK(), issue)
             _check_task_permission(issue, doc.project, "BP Member")
 
             if "status" in fields:
@@ -1929,7 +1931,7 @@ def bulk_delete_tasks(issues):
 
     for issue in issues:
         try:
-            doc = frappe.get_doc("BP Task", issue)
+            doc = frappe.get_doc(TASK(), issue)
             _check_permission(doc.project, "BP Manager")
             projects_touched.add(doc.project)
             delete_task(issue)
@@ -1954,7 +1956,7 @@ def _hard_delete_task(doc_or_name):
     """Actually destroy a task row — the only path that does. Used by
     permanently_delete_task and the daily purge job. delete_task itself no
     longer calls this directly; it soft-deletes (see below)."""
-    doc = doc_or_name if hasattr(doc_or_name, "delete") else frappe.get_doc("BP Task", doc_or_name)
+    doc = doc_or_name if hasattr(doc_or_name, "delete") else frappe.get_doc(TASK(), doc_or_name)
     issue = doc.name
 
     for activity in frappe.get_all("BP Activity", filters={"task": issue}, pluck="name"):
@@ -1967,7 +1969,7 @@ def _hard_delete_task(doc_or_name):
     for watcher in frappe.get_all("BP Task Watcher", filters={"task": issue}, pluck="name"):
         frappe.delete_doc("BP Task Watcher", watcher, ignore_permissions=True, force=True)
 
-    for subtask in frappe.get_all("BP Task", filters={"parent_task": issue}, pluck="name"):
+    for subtask in frappe.get_all(TASK(), filters={"parent_task": issue}, pluck="name"):
         _hard_delete_task(subtask)
 
     doc.delete(ignore_permissions=True)
@@ -1981,14 +1983,14 @@ def delete_task(issue):
     (audit 02 §B3 / 07 §G3): a mis-click on a 200-task bulk selection was
     permanent and became a support escalation with no way back.
     """
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Manager")
     project = doc.project
 
     if doc.is_deleted:
         return {"ok": True, "trashed": True}
 
-    for subtask in frappe.get_all("BP Task", filters={"parent_task": issue, "is_deleted": 0}, pluck="name"):
+    for subtask in frappe.get_all(TASK(), filters={"parent_task": issue, "is_deleted": 0}, pluck="name"):
         delete_task(subtask)
 
     # frappe.db.set_value, not doc.save() — this is a system flag flip, not
@@ -1998,7 +2000,7 @@ def delete_task(issue):
     # notification to every watcher for what the user experiences as a
     # delete, not an edit. Same reasoning timesheet_sync.py documents for
     # actual_hours.
-    frappe.db.set_value("BP Task", issue, {
+    frappe.db.set_value(TASK(), issue, {
         "is_deleted": 1,
         "deleted_on": frappe.utils.now_datetime(),
         "deleted_by": frappe.session.user,
@@ -2012,17 +2014,17 @@ def delete_task(issue):
 @frappe.whitelist()
 def restore_task(issue):
     """Undo delete_task. Recursively restores subtasks trashed alongside it."""
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Manager")
 
     if not doc.is_deleted:
         return {"ok": True, "restored": True}
 
-    frappe.db.set_value("BP Task", issue, {
+    frappe.db.set_value(TASK(), issue, {
         "is_deleted": 0, "deleted_on": None, "deleted_by": None,
     }, update_modified=False)
 
-    for subtask in frappe.get_all("BP Task", filters={"parent_task": issue, "is_deleted": 1}, pluck="name"):
+    for subtask in frappe.get_all(TASK(), filters={"parent_task": issue, "is_deleted": 1}, pluck="name"):
         restore_task(subtask)
 
     frappe.db.commit()
@@ -2036,7 +2038,7 @@ def list_deleted_tasks(project):
     """Trash view for a project — Manager+ only, matching delete_task's own bar."""
     _check_permission(project, "BP Manager")
     return frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"project": project, "is_deleted": 1},
         fields=["name", "task_key", "title", "status", "priority",
                 "parent_task", "deleted_on", "deleted_by"],
@@ -2048,7 +2050,7 @@ def list_deleted_tasks(project):
 def permanently_delete_task(issue):
     """The only path that actually destroys a task. Requires it to already
     be in trash — no skipping straight past the recoverable step."""
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Manager")
     if not doc.is_deleted:
         frappe.throw("Move this task to trash first.")
@@ -2067,7 +2069,7 @@ def permanently_delete_task(issue):
 import uuid
 
 def _get_checklist(task):
-    doc = frappe.get_doc("BP Task", task)
+    doc = frappe.get_doc(TASK(), task)
     cfv = _parse_json(doc.custom_field_values, {})
     return cfv.get("_checklist", [])
 
@@ -2082,7 +2084,7 @@ def _save_checklist(task, mutate, retries=5):
     silently dropping the loser's edit.
     """
     for attempt in range(retries):
-        doc = frappe.get_doc("BP Task", task)
+        doc = frappe.get_doc(TASK(), task)
         cfv = _parse_json(doc.custom_field_values, {})
         items = mutate(cfv.get("_checklist", []))
         cfv["_checklist"] = items
@@ -2100,7 +2102,7 @@ def _save_checklist(task, mutate, retries=5):
 @frappe.whitelist()
 def get_checklist(task):
     """Get checklist items for a task."""
-    doc = frappe.get_doc("BP Task", task)
+    doc = frappe.get_doc(TASK(), task)
     _check_permission(doc.project, "BP Viewer")
     return {"items": _get_checklist(task)}
 
@@ -2108,7 +2110,7 @@ def get_checklist(task):
 @frappe.whitelist()
 def add_checklist_item(task, text):
     """Add a checklist item to a task."""
-    doc = frappe.get_doc("BP Task", task)
+    doc = frappe.get_doc(TASK(), task)
     _check_permission(doc.project, "BP Member")
     new_item = {
         "id": str(uuid.uuid4())[:8],
@@ -2127,7 +2129,7 @@ def add_checklist_item(task, text):
 @frappe.whitelist()
 def update_checklist_item(task, item_id, text):
     """Update checklist item text."""
-    doc = frappe.get_doc("BP Task", task)
+    doc = frappe.get_doc(TASK(), task)
     _check_permission(doc.project, "BP Member")
 
     def mutate(items):
@@ -2144,7 +2146,7 @@ def update_checklist_item(task, item_id, text):
 @frappe.whitelist()
 def toggle_checklist_item(task, item_id):
     """Toggle checklist item done/undone."""
-    doc = frappe.get_doc("BP Task", task)
+    doc = frappe.get_doc(TASK(), task)
     _check_permission(doc.project, "BP Member")
 
     def mutate(items):
@@ -2161,7 +2163,7 @@ def toggle_checklist_item(task, item_id):
 @frappe.whitelist()
 def remove_checklist_item(task, item_id):
     """Remove a checklist item."""
-    doc = frappe.get_doc("BP Task", task)
+    doc = frappe.get_doc(TASK(), task)
     _check_permission(doc.project, "BP Member")
 
     def mutate(items):
@@ -2175,16 +2177,16 @@ def remove_checklist_item(task, item_id):
 def duplicate_task(issue):
     """Create a copy of an existing task. Resets status to the project default;
     does not copy sprint, milestone, parent_task, assignees, or recurrence fields."""
-    src = frappe.get_doc("BP Task", issue)
+    src = frappe.get_doc(TASK(), issue)
     _check_permission(src.project, "BP Member")
 
     # Resolve default status
-    proj = frappe.get_doc("BP Project", src.project)
+    proj = frappe.get_doc(PROJECT(), src.project)
     states = _normalize_workflow_states(proj.get_workflow_states())
     default_status = states[0]["name"] if states else "To Do"
 
     doc = frappe.get_doc({
-        "doctype": "BP Task",
+        "doctype": TASK(),
         "project": src.project,
         "title": f"Copy of {src.title}",
         "status": default_status,
@@ -2217,14 +2219,14 @@ def move_task_to_project(issue, target_project):
     target's first state — matches duplicate_task's own "reset status"
     posture for a project boundary crossing.
     """
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Member")
     if doc.project == target_project:
         frappe.throw("Task is already in this project.")
     _check_permission(target_project, "BP Member")
 
     old_project, old_key = doc.project, doc.task_key
-    target = frappe.get_doc("BP Project", target_project)
+    target = frappe.get_doc(PROJECT(), target_project)
 
     states = _normalize_workflow_states(target.get_workflow_states())
     state_names = {s["name"] for s in states}
@@ -2243,7 +2245,7 @@ def move_task_to_project(issue, target_project):
     # task_key is read_only:1 — the ORM silently drops writes to it even with
     # ignore_permissions (confirmed: only frappe.db.set_value bypasses that),
     # so it has to be set directly, after the rest of the doc is saved.
-    frappe.db.set_value("BP Task", doc.name, "task_key", new_key)
+    frappe.db.set_value(TASK(), doc.name, "task_key", new_key)
     doc.task_key = new_key
     frappe.db.commit()
 
@@ -2309,7 +2311,7 @@ def get_export_data(project, view=None):
 
     # Match the column set exportCsv uses: key, title, plus visible columns
     # We use a fixed sensible default set since we don't have the user's visibleCols
-    tasks = frappe.get_all("BP Task", filters={"project": project},
+    tasks = frappe.get_all(TASK(), filters={"project": project},
         fields=["name", "task_key", "title", "status", "priority", "task_type",
                 "due_date", "start_date", "story_points",
                 "epic", "sprint", "milestone", "estimated_hours", "actual_hours",
@@ -2538,7 +2540,7 @@ def get_mirror_values(doctype, names, project=None):
     filters = {"name": ["in", names]}
     if project and doctype in _MIRROR_PROJECT_SCOPED_DOCTYPES:
         _check_permission(project, "BP Viewer")
-        erp_project = frappe.db.get_value("BP Project", project, "erpnext_project")
+        erp_project = frappe.db.get_value(PROJECT(), project, "erpnext_project")
         if erp_project:
             filters["project"] = erp_project
 
@@ -2562,7 +2564,7 @@ def get_backlog(project):
         return cached
 
     issues = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters=_task_filters({"project": project, "parent_task": ["in", ["", None]]}),
         fields=[
             "name", "task_key", "title", "status", "priority", "task_type",
@@ -2623,7 +2625,7 @@ def move_task_to_sprint(issue, sprint):
     """
     Assign a task to a sprint (or pass sprint='' to move to backlog).
     """
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Member")
 
     if sprint:
@@ -2694,7 +2696,7 @@ def edit_comment(activity, comment_text):
     if doc.action_type != "Comment":
         frappe.throw("Only comments can be edited.")
 
-    task = frappe.get_doc("BP Task", doc.task)
+    task = frappe.get_doc(TASK(), doc.task)
     user = frappe.session.user
 
     # Allow edit if owner or project manager+
@@ -2752,7 +2754,7 @@ def delete_comment(activity):
     if doc.action_type != "Comment":
         frappe.throw("Only comments can be deleted.")
 
-    task = frappe.get_doc("BP Task", doc.task)
+    task = frappe.get_doc(TASK(), doc.task)
     user = frappe.session.user
 
     # Allow delete if owner or project manager+
@@ -2814,7 +2816,7 @@ def set_mute(task=None, project=None, muted=1):
                 "doctype": "BP Notification Mute",
                 "user": user,
                 "task": task or None,
-                "project": project or (frappe.db.get_value("BP Task", task, "project") if task else None),
+                "project": project or (frappe.db.get_value(TASK(), task, "project") if task else None),
             }).insert(ignore_permissions=True)
         return {"muted": True}
     else:
@@ -2945,8 +2947,8 @@ def get_epics(project):
     )
     completed = _get_completed_statuses_by_project(project)
     for epic in epics:
-        total = frappe.db.count("BP Task", _task_filters({"epic": epic["name"]}))
-        done  = frappe.db.count("BP Task", _task_filters({"epic": epic["name"], "status": ["in", completed]}))
+        total = frappe.db.count(TASK(), _task_filters({"epic": epic["name"]}))
+        done  = frappe.db.count(TASK(), _task_filters({"epic": epic["name"], "status": ["in", completed]}))
         epic["total_issues"] = total
         epic["done_issues"]  = done
         epic["progress"]     = round((done / total * 100) if total > 0 else 0, 1)
@@ -3005,23 +3007,23 @@ def delete_epic(epic):
     _check_permission(doc.project, "BP Manager")
     project = doc.project
     # Unlink tasks from this epic (don't delete the tasks)
-    frappe.db.set_value("BP Task", {"epic": epic}, "epic", None, update_modified=False)
+    frappe.db.set_value(TASK(), {"epic": epic}, "epic", None, update_modified=False)
     doc.delete(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
     invalidate_project(project)
     return {"ok": True}
     """Create a copy of an existing task. Resets status to the project default;
     does not copy sprint, milestone, parent_task, assignees, or recurrence fields."""
-    src = frappe.get_doc("BP Task", issue)
+    src = frappe.get_doc(TASK(), issue)
     _check_permission(src.project, "BP Member")
 
     # Resolve default status
-    proj = frappe.get_doc("BP Project", src.project)
+    proj = frappe.get_doc(PROJECT(), src.project)
     states = _normalize_workflow_states(proj.get_workflow_states())
     default_status = states[0]["name"] if states else "To Do"
 
     doc = frappe.get_doc({
-        "doctype": "BP Task",
+        "doctype": TASK(),
         "project": src.project,
         "title": f"Copy of {src.title}",
         "status": default_status,
@@ -3248,11 +3250,11 @@ def get_milestone_report(milestone):
     pure-PM tools can't show without integrations."""
     m = frappe.get_doc("BP Milestone", milestone)
     _check_permission(m.project, "BP Viewer")
-    proj = frappe.get_doc("BP Project", m.project)
+    proj = frappe.get_doc(PROJECT(), m.project)
     completed = set(proj.get_completed_statuses())
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"milestone": milestone},
         fields=["name", "task_key", "title", "status", "story_points",
                 "estimated_hours", "actual_hours", "billable", "due_date"],
@@ -3313,7 +3315,7 @@ def get_project_budget_summary(project):
     erpnext_project link or a premium tier to render a rough estimate."""
     project = _resolve_project(project)
     _check_permission(project, "BP Viewer")
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
 
     act_hours = frappe.db.sql(
         """SELECT SUM(actual_hours) FROM `tabBP Task` WHERE project = %s AND is_deleted = 0""",
@@ -3342,9 +3344,9 @@ def get_project_budget_summary(project):
 
 def _resolve_project(project):
     """Accept either a project name or its short key (the UI route uses the key)."""
-    if frappe.db.exists("BP Project", project):
+    if frappe.db.exists(PROJECT(), project):
         return project
-    alt = frappe.db.get_value("BP Project", {"key": project}, "name")
+    alt = frappe.db.get_value(PROJECT(), {"key": project}, "name")
     return alt or project
 
 
@@ -3462,7 +3464,7 @@ def get_sprints(project):
     points_map = {r["sprint"]: (r["pts"] or 0) for r in points_rows}
 
     # Completed statuses for this project
-    raw_states = frappe.db.get_value("BP Project", project, "workflow_states") or "[]"
+    raw_states = frappe.db.get_value(PROJECT(), project, "workflow_states") or "[]"
     states = _parse_json(raw_states, [])
     done_statuses = [s["name"] for s in states if s.get("category") in ("completed", "cancelled")]
 
@@ -3525,7 +3527,7 @@ def get_sprint_capacity(sprint):
     _check_permission(doc.project, "BP Viewer")
 
     tasks = frappe.get_all(
-        "BP Task", filters={"sprint": sprint, "is_deleted": 0},
+        TASK(), filters={"sprint": sprint, "is_deleted": 0},
         fields=["name", "estimated_hours"],
     )
     task_names = [t["name"] for t in tasks]
@@ -3952,7 +3954,7 @@ def _resolve_scope(scope):
 		# multi-project selection
 		resolved = []
 		for s in scope:
-			p = s if frappe.db.exists("BP Project", s) else frappe.db.get_value("BP Project", {"key": s}, "name")
+			p = s if frappe.db.exists(PROJECT(), s) else frappe.db.get_value(PROJECT(), {"key": s}, "name")
 			if p:
 				_check_permission(p, "BP Viewer")
 				resolved.append(p)
@@ -3967,7 +3969,7 @@ def _resolve_scope(scope):
 		return {"project": ["in", resolved]}, None, resolved
 
 	# single project
-	proj_name = scope if frappe.db.exists("BP Project", scope) else frappe.db.get_value("BP Project", {"key": scope}, "name")
+	proj_name = scope if frappe.db.exists(PROJECT(), scope) else frappe.db.get_value(PROJECT(), {"key": scope}, "name")
 	if proj_name:
 		_check_permission(proj_name, "BP Viewer")
 		return {"project": proj_name}, proj_name, [proj_name]
@@ -4055,7 +4057,7 @@ def _timesheet_hours_by_user(users, from_dt, to_dt):
 
 @frappe.whitelist()
 def add_reference(issue, ref_doctype, ref_name, two_way=0):
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Member")
 
     for r in (doc.references or []):
@@ -4077,7 +4079,7 @@ def add_reference(issue, ref_doctype, ref_name, two_way=0):
         # Two-way connection: leave a backlink on the ERP document's timeline
         # so the other side shows the connection too (best-effort).
         try:
-            key = frappe.db.get_value("BP Project", doc.project, "key")
+            key = frappe.db.get_value(PROJECT(), doc.project, "key")
             ref = frappe.get_doc(ref_doctype, ref_name)
             ref.add_comment(
                 "Comment",
@@ -4105,9 +4107,9 @@ def add_reference(issue, ref_doctype, ref_name, two_way=0):
 def add_task_link(issue, linked_task, link_type="relates to", dep_type="FS", lag_days=0, link_metadata=None):
     if issue == linked_task:
         frappe.throw("A task can't be linked to itself.")
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Member")
-    linked_doc = frappe.get_doc("BP Task", linked_task)
+    linked_doc = frappe.get_doc(TASK(), linked_task)
     # You must at least be able to see the other task (closes the cross-project hole).
     _check_permission(linked_doc.project, "BP Viewer")
 
@@ -4141,8 +4143,8 @@ def archive_team(team):
 	Projects keep their data but are unlinked from the archived team."""
 	_check_team_permission(team, "Admin")
 	frappe.db.set_value("BP Team", team, "status", "Archived")
-	for p in frappe.get_all("BP Project", filters={"team": team}, pluck="name"):
-		frappe.db.set_value("BP Project", p, "team", None)
+	for p in frappe.get_all(PROJECT(), filters={"team": team}, pluck="name"):
+		frappe.db.set_value(PROJECT(), p, "team", None)
 	frappe.db.commit()
 	return {"ok": True}
 
@@ -4153,11 +4155,11 @@ def archive_team(team):
 def assign_project_to_team(project, team):
 	"""Assign or remove a project from a team."""
 	_check_permission(project, "BP Manager")
-	if not frappe.db.exists("BP Project", project):
+	if not frappe.db.exists(PROJECT(), project):
 		frappe.throw(f"Project '{project}' not found.", frappe.DoesNotExistError)
 	# Use db.set_value to avoid running the full validate/save cycle which
 	# can fail with 417 if the calling user lacks Frappe-level write permission.
-	frappe.db.set_value("BP Project", project, "team", team or None)
+	frappe.db.set_value(PROJECT(), project, "team", team or None)
 	frappe.db.commit()
 	return {"project": project, "team": team or None}
 
@@ -4185,14 +4187,14 @@ def backfill_reciprocal_links():
     for r in rows:
         src, tgt, lt = r["parent"], r["linked_task"], r["link_type"]
         inv = INVERSE_LINK.get(lt)
-        if not inv or not frappe.db.exists("BP Task", tgt):
+        if not inv or not frappe.db.exists(TASK(), tgt):
             continue
         if (src, inv) in existing.get(tgt, set()):
             continue  # reciprocal already present
-        meta = frappe.db.get_value("BP Task", src, ["task_key", "title", "status"], as_dict=True)
+        meta = frappe.db.get_value(TASK(), src, ["task_key", "title", "status"], as_dict=True)
         if not meta:
             continue
-        other = frappe.get_doc("BP Task", tgt)
+        other = frappe.get_doc(TASK(), tgt)
         other.append("links", {
             "link_type": inv,
             "linked_task": src,
@@ -4235,7 +4237,7 @@ def complete_sprint(sprint, move_incomplete_to=None):
         filters["status"] = ["not in", done_statuses]
 
     incomplete = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters=filters,
         fields=["name"],
     )
@@ -4258,7 +4260,7 @@ def complete_sprint(sprint, move_incomplete_to=None):
         # fires on a sprint close, and nothing more than the sprint field
         # itself records that the move happened.
         for name in names:
-            t = frappe.get_doc("BP Task", name)
+            t = frappe.get_doc(TASK(), name)
             t.sprint = target
             t.save(ignore_permissions=True)
 
@@ -4271,7 +4273,7 @@ def complete_sprint(sprint, move_incomplete_to=None):
         "project": doc.project,
         "sprint": doc.name,
         "sprint_name": doc.sprint_name,
-        "completed_count": frappe.db.count("BP Task", {"sprint": sprint, "status": ["in", done_statuses]}) if done_statuses else 0,
+        "completed_count": frappe.db.count(TASK(), {"sprint": sprint, "status": ["in", done_statuses]}) if done_statuses else 0,
         "incomplete_count": len(incomplete),
         "moved_to": target,
     })
@@ -4334,7 +4336,7 @@ def get_milestones(project=None):
 	proj_names = list({r["project"] for r in rows})
 	proj_info = {}
 	if proj_names:
-		for p in frappe.get_all("BP Project", filters={"name": ["in", proj_names]},
+		for p in frappe.get_all(PROJECT(), filters={"name": ["in", proj_names]},
 					fields=["name", "project_name", "project_color"]):
 			proj_info[p["name"]] = p
 	for r in rows:
@@ -4391,7 +4393,7 @@ def create_project(
 
     if len(key) < 2:
         frappe.throw("Project key must be at least 2 characters.")
-    if frappe.db.exists("BP Project", {"key": key}):
+    if frappe.db.exists(PROJECT(), {"key": key}):
         frappe.throw(f"Project key '{key}' is already in use.")
 
     # Validate billing fields
@@ -4402,7 +4404,7 @@ def create_project(
         frappe.throw("Total budget is required for fixed-price projects.")
 
     doc = frappe.get_doc({
-        "doctype":        "BP Project",
+        "doctype":        PROJECT(),
         "project_name":   project_name.strip(),
         "key":            key,
         "status":         "Active",
@@ -4562,7 +4564,7 @@ def _get_completed_statuses(project_dict: dict) -> list:
 
 
 def _get_completed_statuses_by_project(project_name: str) -> list:
-    raw = frappe.db.get_value("BP Project", project_name, "workflow_states")
+    raw = frappe.db.get_value(PROJECT(), project_name, "workflow_states")
     states = _parse_json(raw, [])
     return [s["name"] for s in states if s.get("category") in ("completed", "cancelled")]
 
@@ -4618,7 +4620,7 @@ def get_risks(project=None):
 	proj_names = list({r["project"] for r in rows})
 	proj_info = {}
 	if proj_names:
-		for p in frappe.get_all("BP Project", filters={"name": ["in", proj_names]},
+		for p in frappe.get_all(PROJECT(), filters={"name": ["in", proj_names]},
 					fields=["name", "project_name", "project_color"]):
 			proj_info[p["name"]] = p
 	for r in rows:
@@ -4743,10 +4745,10 @@ def create_team_sprint(team, sprint_name, goal=None, start_date=None, end_date=N
 @frappe.whitelist()
 def delete_attachment(file_name):
     doc = frappe.get_doc("File", file_name)
-    if doc.attached_to_doctype != "BP Task":
+    if doc.attached_to_doctype != TASK():
         frappe.throw("Not a BP Task attachment.")
     _check_permission(
-        frappe.db.get_value("BP Task", doc.attached_to_name, "project"),
+        frappe.db.get_value(TASK(), doc.attached_to_name, "project"),
         "BP Member"
     )
     doc.delete(ignore_permissions=True)
@@ -4801,9 +4803,9 @@ def delete_sprint(sprint):
     # NOT filtered to is_deleted=0 — a trashed task must not come back on
     # restore still pointing at a sprint that no longer exists.
     project = doc.project
-    task_names = frappe.get_all("BP Task", filters={"sprint": sprint}, fields=["name"])
+    task_names = frappe.get_all(TASK(), filters={"sprint": sprint}, fields=["name"])
     for t in task_names:
-        task = frappe.get_doc("BP Task", t["name"])
+        task = frappe.get_doc(TASK(), t["name"])
         task.sprint = None
         task.save(ignore_permissions=True)
     frappe.delete_doc("BP Sprint", sprint)
@@ -4842,7 +4844,7 @@ def get_allowed_doctypes(project=None):
         "Expense Claim", "Timesheet", "Delivery Note", "Stock Entry",
         "Payment Entry", "Journal Entry", "Work Order", "Quotation",
     ]
-    erp_linked = bool(project and frappe.db.get_value("BP Project", project, "erpnext_project"))
+    erp_linked = bool(project and frappe.db.get_value(PROJECT(), project, "erpnext_project"))
     requires_project = _PROJECT_FIELD_DOCTYPES | {"Timesheet"}
     existing = []
     for dt in ALLOWED:
@@ -4873,7 +4875,7 @@ def get_automation_options(project=None):
     statuses, task_types, members, labels = [], [], [], []
     if project:
         _check_permission(project, "BP Viewer")
-        proj = frappe.get_doc("BP Project", project)
+        proj = frappe.get_doc(PROJECT(), project)
         statuses = [s.get("name") for s in _normalize_workflow_states(proj.get_workflow_states())]
         task_types = [t["name"] for t in proj.get_issue_types()]
         members = [
@@ -5028,12 +5030,12 @@ def get_reports(project, period="last_30_days", from_date=None, to_date=None):
 	if proj_names is None:
 		from batch_projects.permissions import get_accessible_projects
 		acc = get_accessible_projects(frappe.session.user)
-		proj_names = frappe.get_all("BP Project", pluck="name") if acc is None else list(acc)
+		proj_names = frappe.get_all(PROJECT(), pluck="name") if acc is None else list(acc)
 	else:
 		# Normalise keys → names and permission-check each project in scope.
 		resolved = []
 		for s in proj_names:
-			pn = s if frappe.db.exists("BP Project", s) else frappe.db.get_value("BP Project", {"key": s}, "name")
+			pn = s if frappe.db.exists(PROJECT(), s) else frappe.db.get_value(PROJECT(), {"key": s}, "name")
 			if pn:
 				_check_permission(pn, "BP Viewer")
 				resolved.append(pn)
@@ -5051,7 +5053,7 @@ def get_reports(project, period="last_30_days", from_date=None, to_date=None):
 	states, completed, _seen_states = [], set(), set()
 	for pn in proj_names:
 		try:
-			pdoc = frappe.get_cached_doc("BP Project", pn)
+			pdoc = frappe.get_cached_doc(PROJECT(), pn)
 			for s in _normalize_workflow_states(pdoc.get_workflow_states()):
 				nm = s.get("name")
 				if nm and nm not in _seen_states:
@@ -5096,7 +5098,7 @@ def get_reports(project, period="last_30_days", from_date=None, to_date=None):
 			return None
 
 	tasks = frappe.get_all(
-		"BP Task",
+		TASK(),
 		filters={"project": proj_filter},
 		fields=["name", "status", "story_points", "sprint",
 		        "started_on", "completed_on", "creation"],
@@ -5313,7 +5315,7 @@ def get_members(project=None):
     can_manage = access.has_at_least(project, "Manager")
     user_list = _directory() if can_manage else []
 
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     name_map = {u["user"]: u["full_name"] for u in user_list}
     current = [{
         "user": m.user,
@@ -5398,7 +5400,7 @@ def get_project_tree():
     proj_filters = accessible_project_filter()
     if proj_filters is NO_ACCESSIBLE_PROJECTS:
         return []
-    projects = frappe.get_all("BP Project",
+    projects = frappe.get_all(PROJECT(),
         filters=proj_filters,
         fields=["name", "project_name", "key", "parent_project",
                 "status", "project_color", "theme", "lead", "target_end_date",
@@ -5459,18 +5461,18 @@ def get_project_tree():
 def set_parent_project(project, parent_project=None):
     """Set or remove the parent_project (WBS) for a project."""
     _check_permission(project, "BP Admin")
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     if parent_project:
         if parent_project == project:
             frappe.throw("A project cannot be its own parent.")
         # No circular references
-        check = frappe.db.get_value("BP Project", parent_project, "parent_project")
+        check = frappe.db.get_value(PROJECT(), parent_project, "parent_project")
         visited = {project, parent_project}
         while check:
             if check in visited:
                 frappe.throw("Circular parent relationship detected.")
             visited.add(check)
-            check = frappe.db.get_value("BP Project", check, "parent_project")
+            check = frappe.db.get_value(PROJECT(), check, "parent_project")
     doc.parent_project = parent_project or None
     doc.save(ignore_permissions=True)
     frappe.db.commit()
@@ -5493,7 +5495,7 @@ def get_triage_queue(project=None):
         if acc is not None:
             filters["project"] = ["in", list(acc)]
 
-    tasks = frappe.get_all("BP Task",
+    tasks = frappe.get_all(TASK(),
         filters=_task_filters(filters),
         fields=["name", "task_key", "title", "status", "priority", "project",
                 "creation", "task_type"],
@@ -5504,7 +5506,7 @@ def get_triage_queue(project=None):
     pnames = list({t["project"] for t in tasks})
     proj_map = {}
     if pnames:
-        for p in frappe.get_all("BP Project", filters={"name": ["in", pnames]},
+        for p in frappe.get_all(PROJECT(), filters={"name": ["in", pnames]},
                                 fields=["name", "project_name", "key"]):
             proj_map[p["name"]] = p
 
@@ -5527,7 +5529,7 @@ def get_triage_queue(project=None):
 @frappe.whitelist()
 def mark_triaged(task):
     """Mark a task as triaged (remove from inbox)."""
-    doc = frappe.get_doc("BP Task", task)
+    doc = frappe.get_doc(TASK(), task)
     _check_permission(doc.project, "BP Member")
     doc.needs_triage = 0
     doc.save(ignore_permissions=True)
@@ -5604,9 +5606,9 @@ def _file_project_and_min_role(doc, min_role):
     and run the same _check_permission every other mutation in this module
     uses. Shared by rename_project_file/delete_project_file so the two
     doctypes are never checked two different ways."""
-    if doc.attached_to_doctype == "BP Task":
-        project = frappe.db.get_value("BP Task", doc.attached_to_name, "project")
-    elif doc.attached_to_doctype == "BP Project":
+    if doc.attached_to_doctype == TASK():
+        project = frappe.db.get_value(TASK(), doc.attached_to_name, "project")
+    elif doc.attached_to_doctype == PROJECT():
         project = doc.attached_to_name
     else:
         frappe.throw("Not a project or task attachment.")
@@ -5720,7 +5722,7 @@ def get_teams():
         from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
         proj_filters = accessible_project_filter({"team": team["name"], "status": "Active"})
         projects = [] if proj_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-            "BP Project",
+            PROJECT(),
             filters=proj_filters,
             fields=["name", "project_name", "key", "project_color", "project_icon", "status"],
             order_by="project_name asc",
@@ -5759,14 +5761,14 @@ def get_team(team):
     from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
     _proj_filters = accessible_project_filter({"team": team, "status": "Active"})
     data["projects"] = [] if _proj_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-        "BP Project",
+        PROJECT(),
         filters=_proj_filters,
         fields=["name", "project_name", "key", "project_color", "project_icon", "theme",
                 "workflow_states", "issue_types", "status"],
         order_by="project_name asc",
     )
     for p in data["projects"]:
-        p["open_count"] = frappe.db.count("BP Task", _task_filters({
+        p["open_count"] = frappe.db.count(TASK(), _task_filters({
             "project": p["name"],
             "status": ["not in", _get_completed_statuses(p)],
         }))
@@ -5864,7 +5866,7 @@ def get_my_tasks(
 
     # ── 2. Collect task names where user is reporter ──
     reporter_rows = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"reporter": user},
         pluck="name",
     )
@@ -5917,7 +5919,7 @@ def get_my_tasks(
     order_dir = "desc" if sort_order == "desc" else "asc"
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters=_task_filters(filters),
         fields=[
             "name", "task_key", "title", "status", "priority", "task_type",
@@ -5932,7 +5934,7 @@ def get_my_tasks(
     for task in tasks:
         proj = task["project"]
         if proj not in project_name_map:
-            project_name_map[proj] = frappe.db.get_value("BP Project", proj, "project_name") or proj
+            project_name_map[proj] = frappe.db.get_value(PROJECT(), proj, "project_name") or proj
         task["project_name"] = project_name_map[proj]
         task["is_assigned"] = task["name"] in assignee_set
         task["is_reporter"] = task["reporter"] == user
@@ -5943,7 +5945,7 @@ def get_my_tasks(
         proj = task["project"]
         if proj not in wf_color_map:
             states = _deep_parse_json(
-                frappe.db.get_value("BP Project", proj, "workflow_states") or "[]"
+                frappe.db.get_value(PROJECT(), proj, "workflow_states") or "[]"
             )
             wf_color_map[proj] = {s["name"]: s for s in (states if isinstance(states, list) else [])}
         task["status_color"] = wf_color_map[proj].get(task["status"], {}).get("color", "#636B74")
@@ -6495,7 +6497,7 @@ def get_workspace_summary():
         }
 
     projects = frappe.get_all(
-        "BP Project",
+        PROJECT(),
         filters=proj_filters,
         fields=["name", "project_name", "key", "project_color", "theme", "workflow_states",
                 "project_type", "hourly_rate", "budget_amount", "retainer_hours",
@@ -6826,7 +6828,7 @@ def get_workspace_summary():
         for m in ms_rows:
             p_info = proj_map.get(m["project"], {})
             # tasks_left: count open tasks in project (rough)
-            open_t = frappe.db.count("BP Task", _task_filters({
+            open_t = frappe.db.count(TASK(), _task_filters({
                 "project": m["project"],
                 "status": ["not in", _get_completed_statuses_by_project(m["project"]) or ["Done"]],
             }))
@@ -6914,7 +6916,7 @@ def get_dashboard():
     my_issues = []
     if issue_names:
         my_issues = frappe.get_all(
-            "BP Task",
+            TASK(),
             filters={"name": ["in", issue_names], "is_deleted": 0},
             fields=["name", "task_key", "title", "status", "priority",
                     "project", "due_date", "epic", "story_points", "task_type",
@@ -6950,7 +6952,7 @@ def get_dashboard():
     from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
     proj_filters = accessible_project_filter({"status": "Active"})
     projects = [] if proj_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-        "BP Project",
+        PROJECT(),
         filters=proj_filters,
         fields=["name", "project_name", "key", "workflow_states",
                 "project_color", "target_end_date", "project_type",
@@ -6958,8 +6960,8 @@ def get_dashboard():
     )
     for p in projects:
         completed = _get_completed_statuses(p)
-        p["open_count"]  = frappe.db.count("BP Task", _task_filters({"project": p["name"], "status": ["not in", completed or ["Done"]]}))
-        p["total_count"] = frappe.db.count("BP Task", _task_filters({"project": p["name"]}))
+        p["open_count"]  = frappe.db.count(TASK(), _task_filters({"project": p["name"], "status": ["not in", completed or ["Done"]]}))
+        p["total_count"] = frappe.db.count(TASK(), _task_filters({"project": p["name"]}))
         # Real members
         members = frappe.get_all(
             "BP Project Member",
@@ -7230,7 +7232,7 @@ def search_tasks(query, project=None, exclude=None, limit=10, offset=0):
         or_filters.append(["name", "in", comment_tasks])
 
     return frappe.get_all(
-        "BP Task",
+        TASK(),
         filters=filters,
         fields=["name", "task_key", "title", "status", "priority"],
         or_filters=or_filters,
@@ -7271,7 +7273,7 @@ def search_tasks_global(query, exclude=None, limit=12, offset=0):
         or_filters.append(["name", "in", comment_tasks])
 
     rows = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters=filters,
         fields=["name", "task_key", "title", "status", "priority", "project"],
         or_filters=or_filters,
@@ -7282,7 +7284,7 @@ def search_tasks_global(query, exclude=None, limit=12, offset=0):
     proj_names = {r["project"] for r in rows if r.get("project")}
     name_map = {}
     if proj_names:
-        for p in frappe.get_all("BP Project", filters={"name": ["in", list(proj_names)]},
+        for p in frappe.get_all(PROJECT(), filters={"name": ["in", list(proj_names)]},
                                 fields=["name", "project_name", "key"]):
             name_map[p["name"]] = p
     for r in rows:
@@ -7348,7 +7350,7 @@ def search_erp_documents(doctype, query, limit=10, project=None):
     erp_project = None
     if project:
         access.require(project, "Viewer")
-        erp_project = frappe.db.get_value("BP Project", project, "erpnext_project")
+        erp_project = frappe.db.get_value(PROJECT(), project, "erpnext_project")
         if not erp_project:
             frappe.throw("This project isn't linked to an ERPNext Project yet.")
 
@@ -7467,7 +7469,7 @@ def start_sprint(sprint):
         "project": doc.project,
         "sprint": doc.name,
         "sprint_name": doc.sprint_name,
-        "total_issues": frappe.db.count("BP Task", _task_filters({"sprint": doc.name})),
+        "total_issues": frappe.db.count(TASK(), _task_filters({"sprint": doc.name})),
     })
     return doc.as_dict()
 
@@ -7500,7 +7502,7 @@ def watch_task(task):
     """Current user starts watching a task."""
     from batch_projects.events import add_watcher
     from batch_projects.task_validation import require_live_task
-    _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
+    _check_permission(frappe.db.get_value(TASK(), task, "project"), "BP Viewer")
     require_live_task(task)
     add_watcher(task, frappe.session.user, reason="manual")
     return {"watching": True}
@@ -7512,7 +7514,7 @@ def watch_task(task):
 def unwatch_task(task):
     """Current user stops watching a task."""
     from batch_projects.task_validation import require_live_task
-    _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
+    _check_permission(frappe.db.get_value(TASK(), task, "project"), "BP Viewer")
     require_live_task(task)
     for w in frappe.get_all(
         "BP Task Watcher", filters={"task": task, "user": frappe.session.user}, pluck="name"
@@ -7526,7 +7528,7 @@ def unwatch_task(task):
 @frappe.whitelist()
 def get_task_watchers(task):
     """List watchers of a task + whether the current user is watching."""
-    _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
+    _check_permission(frappe.db.get_value(TASK(), task, "project"), "BP Viewer")
     rows = frappe.get_all(
         "BP Task Watcher", filters={"task": task}, fields=["user", "watch_reason"], order_by="creation asc"
     )
@@ -7561,7 +7563,7 @@ def get_task_watchers(task):
 
 @frappe.whitelist()
 def remove_task_link(issue, linked_task, link_type):
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Member")
     doc.set("links", [
         l for l in doc.get("links", [])
@@ -7571,8 +7573,8 @@ def remove_task_link(issue, linked_task, link_type):
 
     # Remove the reciprocal link from the other task too.
     inverse = INVERSE_LINK.get(link_type)
-    if inverse and frappe.db.exists("BP Task", linked_task):
-        other = frappe.get_doc("BP Task", linked_task)
+    if inverse and frappe.db.exists(TASK(), linked_task):
+        other = frappe.get_doc(TASK(), linked_task)
         kept = [l for l in other.get("links", [])
                 if not (l.linked_task == issue and l.link_type == inverse)]
         if len(kept) != len(other.get("links", [])):
@@ -7588,7 +7590,7 @@ def remove_task_link(issue, linked_task, link_type):
 def remove_reference(issue, reference_name=None, ref_doctype=None, ref_name=None):
     """Unlink by child-row name OR by (ref_doctype, ref_name) — clients that
     loaded references before row names shipped can still unlink."""
-    doc = frappe.get_doc("BP Task", issue)
+    doc = frappe.get_doc(TASK(), issue)
     _check_permission(doc.project, "BP Member")
 
     def keep(r):
@@ -7803,11 +7805,11 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
     else:
         from batch_projects.permissions import get_accessible_projects
         acc = get_accessible_projects()
-        scope_projects = frappe.get_all("BP Project", pluck="name") if acc is None else list(acc)
+        scope_projects = frappe.get_all(PROJECT(), pluck="name") if acc is None else list(acc)
     completed = set()
     for pn in scope_projects:
         try:
-            completed |= set(frappe.get_cached_doc("BP Project", pn).get_completed_statuses())
+            completed |= set(frappe.get_cached_doc(PROJECT(), pn).get_completed_statuses())
         except Exception:
             pass
 
@@ -7822,7 +7824,11 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
     or_filters = None
     if search:
         s = f"%{search}%"
-        or_filters = [["BP Task", "title", "like", s], ["BP Task", "task_key", "like", s]]
+        # list-of-list filters are not translated by task_filters (a partial
+        # translation would be worse than none), so the doctype and both field
+        # names are resolved explicitly.
+        _t, _title, _key = TASK(), task_field("title"), task_field("task_key")
+        or_filters = [[_t, _title, "like", s], [_t, _key, "like", s]]
 
     sort_map = {
         "modified": "modified", "creation": "creation", "due_date": "due_date",
@@ -7838,10 +7844,10 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
     # runs with ignore_permissions=True, which skips permission_query_conditions
     # entirely (confirmed in frappe/model/db_query.py) — this is scoped by the
     # explicit _resolve_scope()/get_accessible_projects() above, not by that hook.
-    total = len(frappe.get_all("BP Task", filters=db_filters, or_filters=or_filters, pluck="name"))
+    total = len(frappe.get_all(TASK(), filters=db_filters, or_filters=or_filters, pluck="name"))
 
     tasks = frappe.get_all(
-        "BP Task", filters=db_filters, or_filters=or_filters, fields=fields,
+        TASK(), filters=db_filters, or_filters=or_filters, fields=fields,
         order_by=order_by, limit_start=int(offset), limit_page_length=int(limit),
     )
 
@@ -7850,7 +7856,7 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
     for t in tasks:
         p = t["project"]
         if p not in pname:
-            pname[p] = frappe.db.get_value("BP Project", p, "project_name") or p
+            pname[p] = frappe.db.get_value(PROJECT(), p, "project_name") or p
         t["project_name"] = pname[p]
     names = [t["name"] for t in tasks]
     amap = {}
@@ -7897,7 +7903,7 @@ def get_widget_data(config):
     # collection applies — without it a trashed task still counted toward
     # dashboard widget metrics after the scope check above.
     tasks = frappe.get_all(
-        "BP Task", filters=_task_filters(filters),
+        TASK(), filters=_task_filters(filters),
         fields=["name", "status", "priority", "task_type", "project", "epic",
                 "story_points", "estimated_hours", "actual_hours"],
     )
@@ -7934,10 +7940,10 @@ def get_widget_data(config):
     color_map, label_map = {}, {}
     if group_by == "status":
         # Collect from the resolved project(s); fall back to all projects when scope is "all"
-        color_sources = proj_names if proj_names else [p["name"] for p in frappe.get_all("BP Project", fields=["name"])]
+        color_sources = proj_names if proj_names else [p["name"] for p in frappe.get_all(PROJECT(), fields=["name"])]
         for pn in color_sources:
             try:
-                for s in frappe.get_cached_doc("BP Project", pn).get_workflow_states():
+                for s in frappe.get_cached_doc(PROJECT(), pn).get_workflow_states():
                     if s.get("name") not in color_map:
                         color_map[s.get("name")] = s.get("color")
             except Exception:
@@ -7953,7 +7959,7 @@ def get_widget_data(config):
     elif group_by == "project":
         pkeys = [k for k in groups if k and k != "(none)"]
         if pkeys:
-            for p in frappe.get_all("BP Project", filters={"name": ["in", pkeys]}, fields=["name", "project_name", "project_color"]):
+            for p in frappe.get_all(PROJECT(), filters={"name": ["in", pkeys]}, fields=["name", "project_name", "project_color"]):
                 label_map[p["name"]] = p["project_name"]
                 color_map[p["name"]] = p["project_color"]
 
@@ -8020,7 +8026,7 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
     # Temporarily override get_all to use our filters by calling core logic directly
     # Same live-task boundary as get_widget_data above.
     tasks = frappe.get_all(
-        "BP Task", filters=_task_filters(db_filters),
+        TASK(), filters=_task_filters(db_filters),
         fields=["name", "status", "priority", "task_type", "project", "epic",
                 "story_points", "estimated_hours", "actual_hours"],
     )
@@ -8059,10 +8065,10 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
     if group_by == "priority":
         color_map = dict(_WIDGET_PRIORITY)
     elif group_by == "status":
-        color_sources = proj_names if proj_names else [p["name"] for p in frappe.get_all("BP Project", fields=["name"])]
+        color_sources = proj_names if proj_names else [p["name"] for p in frappe.get_all(PROJECT(), fields=["name"])]
         for pn in color_sources:
             try:
-                for s in frappe.get_cached_doc("BP Project", pn).get_workflow_states():
+                for s in frappe.get_cached_doc(PROJECT(), pn).get_workflow_states():
                     if s.get("name") not in color_map:
                         color_map[s.get("name")] = s.get("color")
             except Exception:
@@ -8133,7 +8139,7 @@ def get_sprint_report(project, sprint_name):
     if sprint.project != project:
         frappe.throw("Sprint does not belong to project", frappe.PermissionError)
 
-    proj = frappe.get_doc("BP Project", project)
+    proj = frappe.get_doc(PROJECT(), project)
     completed_statuses = set(proj.get_completed_statuses())
 
     def _d(v):
@@ -8147,7 +8153,7 @@ def get_sprint_report(project, sprint_name):
     end_date   = _d(sprint.end_date)
 
     tasks = frappe.get_all(
-        "BP Task",
+        TASK(),
         filters={"project": project, "sprint": sprint_name, "is_deleted": 0},
         fields=["name", "title", "task_key", "status", "priority", "story_points",
                 "started_on", "completed_on", "creation", "docstatus"],
@@ -8281,7 +8287,7 @@ def get_team_velocity(team, last_n_sprints=5):
         if accessible is not None:
             filters["project"] = ["in", list(accessible)]
         issues = frappe.get_all(
-            "BP Task",
+            TASK(),
             filters=filters,
             fields=["story_points", "status", "project"],
         )
@@ -8335,7 +8341,7 @@ def get_team_dashboard(team):
     from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
     _owned_filters = accessible_project_filter({"team": team, "status": "Active"})
     owned_projects = [] if _owned_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-        "BP Project",
+        PROJECT(),
         filters=_owned_filters,
         fields=["name", "project_name", "key", "project_color", "project_icon"],
         order_by="project_name asc",
@@ -8343,7 +8349,7 @@ def get_team_dashboard(team):
     owned_names    = {p["name"] for p in owned_projects}
     team_user_set  = set(member_users)
     for p in owned_projects:
-        p["open_count"]        = frappe.db.count("BP Task", _task_filters({
+        p["open_count"]        = frappe.db.count(TASK(), _task_filters({
             "project": p["name"],
             "status":  ["not in", _get_completed_statuses_by_project(p["name"])],
         }))
@@ -8381,7 +8387,7 @@ def get_team_dashboard(team):
             as_dict=True,
         )
         for p in contrib_rows:
-            p["open_count"]        = frappe.db.count("BP Task", _task_filters({
+            p["open_count"]        = frappe.db.count(TASK(), _task_filters({
                 "project": p["name"],
                 "status":  ["not in", _get_completed_statuses_by_project(p["name"])],
             }))
@@ -8898,21 +8904,21 @@ def get_field_value_choices(doctype, fieldname, project=None):
     if not frappe.has_permission(doctype, "read"):
         return []
 
-    if doctype == "BP Task" and fieldname == "status":
+    if doctype == TASK() and fieldname == "status":
         from batch_projects.permissions import get_accessible_projects
         if project:
-            if not frappe.db.exists("BP Project", project):
+            if not frappe.db.exists(PROJECT(), project):
                 return []
             accessible = get_accessible_projects()
             if accessible is not None and project not in accessible:
                 return []
             return [s.get("name") for s in _parse_json(
-                frappe.db.get_value("BP Project", project, "workflow_states"), []
+                frappe.db.get_value(PROJECT(), project, "workflow_states"), []
             ) if s.get("name")]
 
         accessible = get_accessible_projects()
         filters = {"name": ["in", list(accessible)]} if accessible is not None else {}
-        rows = frappe.get_all("BP Project", filters=filters, pluck="workflow_states")
+        rows = frappe.get_all(PROJECT(), filters=filters, pluck="workflow_states")
         seen, out = set(), []
         for raw in rows:
             for s in _parse_json(raw, []):
