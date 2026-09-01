@@ -4082,7 +4082,7 @@ def add_reference(issue, ref_doctype, ref_name, two_way=0):
             ref.add_comment(
                 "Comment",
                 f"Linked to project task <b>{doc.task_key}</b>: {doc.title}"
-                f" — <a href='/workspace/{key}/board?task={doc.task_key}'>open task</a>",
+                f" — <a href='/desk/bp-task/{doc.task_key}'>open task</a>",
             )
         except Exception:
             frappe.log_error(frappe.get_traceback(), "bp two-way backlink failed")

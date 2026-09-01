@@ -208,6 +208,39 @@ module in ERPNext.
 
 ## [Unreleased]
 
+### Stage 4 — the Vue SPA is removed
+
+66,369 lines across 528 files, plus the 355-file committed bundle, the two www
+host pages, `spa_assets.py`, the Vite pipeline and the `frontend-dist-drift` CI
+job. The UI is the Frappe v16 desk now.
+
+**Public routes withdrawn.** `/workspace`, `/share/<token>` and
+`/intake/<token>` no longer resolve. The last two were public and
+unauthenticated: any share link already given to a client, and any published
+intake form, stops working. The `BP Share Link` / `BP Intake Form` doctypes and
+their endpoints are untouched — the data and API remain, only the page that
+rendered them is gone.
+
+**One route was kept.** `/invite/<token>` is now served by `www/invite.py`
+instead of the SPA. Without it every invitation email points at a 404 and there
+is no way to accept an invitation at all — unlike the surfaces above, nobody
+chose to drop project onboarding. The inline "set a password and join" step is
+the part that shrank: `signup_and_accept` still exists, but a new invitee now
+sets their password through Frappe's standard flow rather than a bespoke form.
+
+**Notification deep links were rewired, not deleted.** Eleven URL constructions
+in `events.py`, `email_templates.py`, `api/credentials.py`,
+`api/notifications_admin.py` and `api/board.py` pointed into `/workspace/...`.
+Those links leave the application — they arrive in somebody's inbox, where a
+dead URL cannot be recalled. They now go through `desk_urls.py`, a single module
+whose two doctype constants are the only thing that changes when the native
+migration is activated.
+
+Also dropped: the SPA-only surfaces with no desk equivalent — Draw/whiteboard,
+Portfolio, Triage, Workload, Margin and Utilization — per the decision not to
+rebuild them.
+
+
 ### Native-doctype migration (in progress)
 
 Moving the app off its parallel `BP Project`/`BP Task` model onto ERPNext's

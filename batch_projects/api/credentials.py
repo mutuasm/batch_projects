@@ -187,7 +187,9 @@ def oauth_callback():
 
     # Redirect to integrations page with success
     frappe.local.response["type"] = "redirect"
-    frappe.local.response["location"] = get_url("/workspace/settings/integrations?oauth=success")
+    from batch_projects import desk_urls
+
+    frappe.local.response["location"] = desk_urls.workspace_settings_url()
 
 
 @frappe.whitelist()

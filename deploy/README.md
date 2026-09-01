@@ -4,7 +4,8 @@ Projects is a single, fully open edition — every feature is enabled on
 every install. There is nothing to license and no paid tier, so a deployment
 is just a Frappe app install.
 
-1. **Projects** — the Frappe application and Vue interface. Installed
+1. **Projects** — the Frappe application. The UI is the Frappe v16 desk;
+   there is no separate frontend to build. Installed
    with a standard `bench get-app`, and works anywhere Frappe does:
    self-hosted (Docker or bare bench) or on Frappe Cloud. See the
    [root README](../README.md#quick-start). Starting from nothing?
