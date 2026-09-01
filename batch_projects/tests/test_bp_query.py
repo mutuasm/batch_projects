@@ -102,3 +102,56 @@ class TestTranslationWhenOn(UnitTestCase):
         with _flag(True):
             listy = [["Task", "status", "=", "Open"]]
             self.assertIs(q._translate("Task", {"filters": listy})["filters"], listy)
+
+
+class TestCallShapeIsPreserved(UnitTestCase):
+    """A wrapper that normalises call shape is not a pass-through.
+
+    Two existing tests proved this from opposite directions: test_dashboard_
+    security reads `count.call_args.kwargs["filters"]` while
+    test_live_task_surface_invariants reads `count.call_args.args[1]`, because
+    the two original call sites passed filters differently. An earlier version
+    of these wrappers forced everything to keyword form and broke the second
+    while fixing the first.
+
+    Nothing failed at runtime either time — frappe accepts both — so only
+    introspection broke. Anything else reading those call args would have
+    silently seen the wrong thing.
+    """
+
+    def _shape(self, call):
+        return tuple(call.args[1:]), dict(call.kwargs)
+
+    def test_positional_filters_stay_positional(self):
+        for flag_value in (None, True):
+            with _flag(flag_value):
+                with patch.object(frappe.db, "count") as mock:
+                    q.count("BP Task", {"is_deleted": 0})
+                args, kwargs = self._shape(mock.call_args)
+                self.assertEqual(len(args), 1, "positional filters became a keyword")
+                self.assertEqual(kwargs, {})
+
+    def test_keyword_filters_stay_keyword(self):
+        for flag_value in (None, True):
+            with _flag(flag_value):
+                with patch.object(frappe.db, "count") as mock:
+                    q.count("BP Task", filters={"is_deleted": 0})
+                args, kwargs = self._shape(mock.call_args)
+                self.assertEqual(args, ())
+                self.assertIn("filters", kwargs)
+
+    def test_translation_still_happens_in_both_shapes(self):
+        with _flag(True):
+            with patch.object(frappe.db, "count") as mock:
+                q.count("Task", {"is_deleted": 0})
+            self.assertEqual(mock.call_args.args[1], {"custom_is_deleted": 0})
+
+            with patch.object(frappe.db, "count") as mock:
+                q.count("Task", filters={"is_deleted": 0})
+            self.assertEqual(mock.call_args.kwargs["filters"], {"custom_is_deleted": 0})
+
+    def test_get_value_preserves_positional_fieldname(self):
+        with _flag(True):
+            with patch.object(frappe.db, "get_value") as mock:
+                q.get_value("Task", "TASK-1", "title")
+            self.assertEqual(mock.call_args.args, ("Task", "TASK-1", "subject"))

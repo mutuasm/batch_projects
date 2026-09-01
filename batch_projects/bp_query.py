@@ -120,49 +120,88 @@ def db_get_all(doctype, **kwargs):
     return frappe.db.get_all(doctype, **_translate(doctype, kwargs))
 
 
-def get_value(doctype, filters=None, fieldname="name", **kwargs):
-    """frappe.db.get_value with both `filters` and `fieldname` translated.
+def _translate_positional(target, args, kwargs, names):
+    """Translate arguments without changing whether they were positional.
 
-    `filters` is often a bare record name rather than a dict; that passes
-    through untouched, since a name is not a field reference.
+    A wrapper that normalises call shape is not a pass-through. Two tests
+    proved it from opposite directions: one asserts on
+    `call_args.kwargs["filters"]`, the other on `call_args.args[1]`, because
+    the two original call sites passed filters differently. Forwarding exactly
+    as received keeps both true — and keeps the "OFF changes nothing" promise
+    honest for any other caller that introspects these calls.
+
+    `names` maps each positional slot (after the doctype) to how it should be
+    translated: "filters" or "fields".
+    """
+    args = list(args)
+    for index, kind in enumerate(names):
+        if index < len(args):
+            args[index] = (
+                _filters(target, args[index])
+                if kind == "filters" and isinstance(args[index], dict)
+                else _fields(target, args[index]) if kind == "fields" else args[index]
+            )
+        elif kind in kwargs:
+            value = kwargs[kind]
+            if kind == "filters" and isinstance(value, dict):
+                kwargs[kind] = _filters(target, value)
+            elif kind == "fields":
+                kwargs[kind] = _fields(target, value)
+    return args, kwargs
+
+
+def get_value(doctype, *args, **kwargs):
+    """frappe.db.get_value(doctype, filters, fieldname, ...).
+
+    `filters` is often a bare record name rather than a dict; a name is not a
+    field reference, so it passes through untouched.
     """
     target = _target(doctype)
     if target:
-        if isinstance(filters, dict):
-            filters = _filters(target, filters)
-        fieldname = _fields(target, fieldname)
+        args, kwargs = _translate_positional(target, args, kwargs, ["filters", "fieldname"])
+        if "fieldname" in kwargs:
+            kwargs["fieldname"] = _fields(target, kwargs["fieldname"])
+        if len(args) > 1:
+            args[1] = _fields(target, args[1])
         if kwargs.get("order_by"):
             kwargs["order_by"] = _order(target, kwargs["order_by"])
-    return frappe.db.get_value(doctype, filters, fieldname, **kwargs)
+    return frappe.db.get_value(doctype, *args, **kwargs)
 
 
-def set_value(doctype, filters, fieldname, value=None, **kwargs):
-    """frappe.db.set_value. `fieldname` may also be a {field: value} dict."""
+def set_value(doctype, *args, **kwargs):
+    """frappe.db.set_value(doctype, dn, fieldname, value, ...).
+
+    `fieldname` may also be a {field: value} dict.
+    """
     target = _target(doctype)
     if target:
-        if isinstance(filters, dict):
-            filters = _filters(target, filters)
-        if isinstance(fieldname, dict):
-            fieldname = {_fields(target, k): v for k, v in fieldname.items()}
-        else:
-            fieldname = _fields(target, fieldname)
-    return frappe.db.set_value(doctype, filters, fieldname, value, **kwargs)
+        args = list(args)
+        if args and isinstance(args[0], dict):
+            args[0] = _filters(target, args[0])
+        if len(args) > 1:
+            args[1] = (
+                {_fields(target, k): v for k, v in args[1].items()}
+                if isinstance(args[1], dict)
+                else _fields(target, args[1])
+            )
+        elif "fieldname" in kwargs:
+            kwargs["fieldname"] = _fields(target, kwargs["fieldname"])
+    return frappe.db.set_value(doctype, *args, **kwargs)
 
 
-def exists(doctype, filters=None, **kwargs):
+def exists(doctype, *args, **kwargs):
     target = _target(doctype)
-    if target and isinstance(filters, dict):
-        filters = _filters(target, filters)
-    return frappe.db.exists(doctype, filters, **kwargs)
+    if target:
+        args = list(args)
+        if args and isinstance(args[0], dict):
+            args[0] = _filters(target, args[0])
+        elif "dn" in kwargs and isinstance(kwargs["dn"], dict):
+            kwargs["dn"] = _filters(target, kwargs["dn"])
+    return frappe.db.exists(doctype, *args, **kwargs)
 
 
-def count(doctype, filters=None, **kwargs):
+def count(doctype, *args, **kwargs):
     target = _target(doctype)
-    if target and isinstance(filters, dict):
-        filters = _filters(target, filters)
-    # Passed as a keyword because that is frappe's own parameter name here, and
-    # because callers (and the tests that patch this) inspect
-    # call_args.kwargs["filters"]. Positional would still work but would break
-    # that introspection silently. `exists` and `set_value` take `dn` rather
-    # than `filters`, so they stay positional on purpose.
-    return frappe.db.count(doctype, filters=filters, **kwargs)
+    if target:
+        args, kwargs = _translate_positional(target, args, kwargs, ["filters"])
+    return frappe.db.count(doctype, *args, **kwargs)
