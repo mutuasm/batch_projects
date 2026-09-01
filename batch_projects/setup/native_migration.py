@@ -271,6 +271,109 @@ def migrate_task(bp_name, project_map=None):
     return native.name
 
 
+def _bp_parent_chain_is_cyclic(child, parent_of, limit=64):
+    """Whether following parent_task from `child` loops or runs away.
+
+    BP Task is a plain Link, not a nested set, so nothing ever stopped a row
+    from pointing at its own descendant. Native Task IS a nested set, and
+    feeding a cycle to update_nsm corrupts lft/rgt for the whole tree — a
+    failure that shows up later as a tree view that renders wrong, not as an
+    exception here. Cheaper to refuse the cycle than to repair the tree.
+    """
+    seen, node = {child}, parent_of.get(child)
+    for _ in range(limit):
+        if not node:
+            return False
+        if node in seen:
+            return True
+        seen.add(node)
+        node = parent_of.get(node)
+    return True  # deeper than any real breakdown — treat as runaway
+
+
+def migrate_task_hierarchy():
+    """Reproduce BP Task's parent/child structure on the native side.
+
+    A second pass, deliberately. A child's parent may be migrated after the
+    child, so there is no single ordering in which the first pass could resolve
+    every link — and BP Task.parent_task holds a BP row name, which is not a
+    valid value for native Task.parent_task until both sides exist.
+
+    Two ERPNext constraints shape the order of operations:
+
+      * `Task.validate_parent_is_group` throws unless the parent carries
+        `is_group = 1`, so every parent is marked before any child is attached.
+      * Task is a NestedSet. `parent_task` is therefore set through
+        `doc.save()`, never `db.set_value`: the latter would leave `lft`/`rgt`
+        describing the old shape, and the tree view reads those, not
+        parent_task. The tree would render a structure the data does not have.
+
+    Without this pass the migration silently flattens every hierarchy — each
+    task arrives as a root and the nesting is simply gone.
+    """
+    stats = {"linked": 0, "groups": 0, "skipped": 0, "cyclic": 0, "failed": 0}
+
+    rows = frappe.get_all(
+        "BP Task",
+        filters={"parent_task": ["is", "set"]},
+        fields=["name", "parent_task", "erpnext_task"],
+        ignore_permissions=True,
+    )
+    if not rows:
+        return stats
+
+    parent_of = {r.name: r.parent_task for r in rows}
+    native_of = {
+        r.name: r.erpnext_task
+        for r in frappe.get_all(
+            "BP Task",
+            filters={"name": ["in", sorted({r.parent_task for r in rows} | set(parent_of))]},
+            fields=["name", "erpnext_task"],
+            ignore_permissions=True,
+        )
+    }
+
+    pairs = []
+    for row in rows:
+        child, parent = row.erpnext_task, native_of.get(row.parent_task)
+        if not child or not parent or child == parent:
+            # Either side unmigrated, or a row that is its own parent.
+            stats["skipped"] += 1
+            continue
+        if _bp_parent_chain_is_cyclic(row.name, parent_of):
+            stats["cyclic"] += 1
+            continue
+        pairs.append((child, parent))
+
+    # Parents first — a child save would be rejected otherwise.
+    for parent in sorted({p for _, p in pairs}):
+        if not frappe.db.get_value("Task", parent, "is_group"):
+            frappe.db.set_value("Task", parent, "is_group", 1, update_modified=False)
+            stats["groups"] += 1
+
+    for child, parent in pairs:
+        try:
+            doc = frappe.get_doc("Task", child)
+            if doc.parent_task == parent:
+                continue  # already linked by an earlier run
+            doc.parent_task = parent
+            doc.save(ignore_permissions=True)  # NestedSet maintains lft/rgt
+            stats["linked"] += 1
+        except Exception:
+            # Most likely one of ERPNext's parent/child date validations. The
+            # task itself is already migrated and correct; only its nesting is
+            # missing, so this is counted rather than allowed to abort the pass.
+            stats["failed"] += 1
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"native migration: hierarchy {child} -> {parent}",
+            )
+
+    frappe.db.commit()
+    frappe.logger("batch_projects").info(f"native hierarchy: {stats}")
+    return stats
+
+
 def run_native_migration():
     """Migrate every BP Project and BP Task. Idempotent; never raises.
 
@@ -297,6 +400,9 @@ def run_native_migration():
         except Exception:
             stats["failed"] += 1
             frappe.log_error(frappe.get_traceback(), f"native migration: BP Task {name}")
+
+    # Hierarchy last: every task must exist before parents can be resolved.
+    stats["hierarchy"] = migrate_task_hierarchy()
 
     frappe.db.commit()
     frappe.logger("batch_projects").info(f"native migration: {stats}")
@@ -533,6 +639,26 @@ def dry_run_native_migration():
             report["satellites"]["detail"].append(
                 {"doctype": doctype, "field": fieldname, "rows": pending}
             )
+
+    # Hierarchy: how much nesting there is to carry over, and how much of it
+    # cannot be. `unresolved` is the number whose parent has no native
+    # counterpart yet — expected before the first run, a problem after one.
+    total = frappe.db.count("BP Task", {"parent_task": ["is", "set"]})
+    unresolved = frappe.db.sql(
+        """
+        SELECT count(*)
+          FROM `tabBP Task` child
+          LEFT JOIN `tabBP Task` parent ON child.`parent_task` = parent.`name`
+         WHERE child.`parent_task` is not null AND child.`parent_task` != ''
+           AND (parent.`name` is null
+                OR parent.`erpnext_task` is null OR parent.`erpnext_task` = '')
+        """
+    )[0][0]
+    report["hierarchy"] = {
+        "links": total,
+        "unresolved_parents": unresolved,
+        "ready": total - unresolved,
+    }
 
     return report
 
