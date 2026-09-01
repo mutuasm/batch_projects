@@ -95,6 +95,14 @@ doctype_list_js = {
     "Project": "public/js/project_jira.js",
 }
 
+# Project's BP-named field aliases are ATTACHED to whatever controller is
+# already active rather than registered as an override — HRMS owns Project's
+# controller and frappe applies only one. Both hooks are needed: before_request
+# covers web traffic, before_job covers background jobs. Idempotent after the
+# first call. See native_controllers.install_project_aliases.
+before_request = ["batch_projects.native_controllers.before_request"]
+before_job = ["batch_projects.native_controllers.before_job"]
+
 # Hooks
 after_install = "batch_projects.setup.install.after_install"
 

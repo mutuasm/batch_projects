@@ -97,15 +97,56 @@ class BPTask(_TaskBase):
 add_bp_aliases(BPTask, "Task")
 
 
-# Project is deliberately NOT overridden.
+# Project: aliases are ADDED to whatever controller is active, never replacing it.
 #
-# HRMS already registers `hrms.overrides.employee_project.EmployeeProject` for
-# Project, and frappe applies only ONE override — `class_overrides[doctype][-1]`,
-# the last installed app. It does not chain them. Registering ours would
-# therefore displace HRMS's controller on any site running HR, silently removing
-# behaviour that belongs to another app, and the winner would flip with install
-# order. Confirmed on a live site: get_controller("Project") returns
-# EmployeeProject there.
+# HRMS registers `hrms.overrides.employee_project.EmployeeProject` for Project,
+# and frappe applies only ONE override — `class_overrides[doctype][-1]`, the
+# last installed app. It does not chain. Registering ours would displace HRMS's
+# controller on any site running HR, silently removing another app's behaviour,
+# and the winner would flip with install order. Confirmed on a live site:
+# get_controller("Project") returns EmployeeProject there.
 #
-# Project field access goes through native_adapter instead, which needs no
-# controller and cannot collide with another app.
+# So instead of an override, the BP-named properties are attached to the class
+# frappe already resolved. That leaves HRMS's controller exactly as it is and
+# only adds attributes to it. The alternative was translating 159 Project field
+# accesses by hand — each one a chance to silently read None, which is the
+# failure mode this migration is most exposed to.
+#
+# add_bp_aliases() never shadows: it skips any name the class already defines.
+# The alias names cannot collide with a native docfield either, by
+# construction — they are exactly the BP fields that have no native equivalent
+# (which is why they became custom fields) plus the mapped ones (which are
+# mapped precisely because the native side spells them differently).
+
+_project_aliases_installed = False
+
+
+def install_project_aliases():
+    """Attach BP-named properties to the active Project controller. Idempotent.
+
+    Called from `before_request` and `before_job` so it covers both web traffic
+    and background jobs; a module-level flag makes every call after the first a
+    single boolean check.
+    """
+    global _project_aliases_installed
+    if _project_aliases_installed:
+        return
+    try:
+        from frappe.model.base_document import get_controller
+
+        add_bp_aliases(get_controller("Project"), "Project")
+        _project_aliases_installed = True
+    except Exception:
+        # A missing controller must not break request handling; the aliases are
+        # a convenience over frappe's own get()/set().
+        frappe.log_error(
+            frappe.get_traceback(), "batch_projects: could not install Project aliases"
+        )
+
+
+def before_request():
+    install_project_aliases()
+
+
+def before_job(*args, **kwargs):
+    install_project_aliases()

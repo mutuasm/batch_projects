@@ -69,3 +69,68 @@ class TestControllerWiring(IntegrationTestCase):
         self.assertEqual(doc.title, "written natively")
         doc.title = "written through the alias"
         self.assertEqual(doc.subject, "written through the alias")
+
+
+class TestProjectAliasesAugmentRatherThanOverride(IntegrationTestCase):
+    """Project aliases must be added to HRMS's controller, never replace it.
+
+    HRMS registers EmployeeProject for Project and frappe applies only one
+    override — ours would displace theirs, silently removing another app's
+    behaviour from a site running HR, with the winner flipping on install
+    order. So the properties are attached to whatever class frappe already
+    resolved.
+
+    159 Project field accesses depend on these aliases; the alternative was
+    translating each by hand, every one a chance to silently read None.
+    """
+
+    def test_installing_aliases_does_not_replace_the_controller(self):
+        from frappe.model.base_document import get_controller
+        from batch_projects.native_controllers import install_project_aliases
+
+        before = get_controller("Project")
+        install_project_aliases()
+        self.assertIs(get_controller("Project"), before, "the controller was replaced")
+
+    def test_another_apps_controller_survives(self):
+        """On a site with HRMS this must still be EmployeeProject."""
+        from frappe.model.base_document import get_controller
+        from batch_projects.native_controllers import install_project_aliases
+
+        install_project_aliases()
+        controller = get_controller("Project")
+        overrides = frappe.get_hooks("override_doctype_class") or {}
+        for path in overrides.get("Project", []):
+            owner = path.rsplit(".", 1)[-1]
+            self.assertTrue(
+                any(c.__name__ == owner for c in controller.__mro__),
+                f"{owner} was displaced from the Project controller",
+            )
+
+    def test_aliases_read_and_write_the_native_field(self):
+        from batch_projects.native_controllers import install_project_aliases
+
+        install_project_aliases()
+        doc = frappe.new_doc("Project")
+        doc.customer = "written natively"
+        self.assertEqual(doc.client, "written natively")
+        doc.client = "written through the alias"
+        self.assertEqual(doc.customer, "written through the alias")
+
+    def test_installing_twice_is_harmless(self):
+        from batch_projects.native_controllers import install_project_aliases
+
+        install_project_aliases()
+        install_project_aliases()
+        from frappe.model.base_document import get_controller
+
+        self.assertTrue(hasattr(get_controller("Project"), "client"))
+
+    def test_both_request_and_job_entrypoints_are_registered(self):
+        """Background jobs never go through before_request."""
+        for hook in ("before_request", "before_job"):
+            registered = frappe.get_hooks(hook, app_name="batch_projects") or []
+            self.assertTrue(
+                any("native_controllers" in h for h in registered),
+                f"{hook} does not install the Project aliases",
+            )
