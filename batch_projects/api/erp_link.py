@@ -19,6 +19,8 @@ import frappe
 
 from frappe.utils import flt, add_days, nowdate
 
+from batch_projects.doctypes import PROJECT, TASK
+
 from batch_projects.api.board import _check_permission, _require_system_user
 from batch_projects.entitlements import require_workspace_feature
 from batch_projects.billing_reservation import (
@@ -36,13 +38,13 @@ def link_erpnext_project(project, erpnext_project):
     if not frappe.db.exists("Project", erpnext_project):
         frappe.throw(f"ERPNext Project {erpnext_project} does not exist.")
 
-    claimed_by = frappe.db.get_value("BP Project", {"erpnext_project": erpnext_project}, "name")
+    claimed_by = frappe.db.get_value(PROJECT(), {"erpnext_project": erpnext_project}, "name")
     if claimed_by and claimed_by != project:
         frappe.throw(
             f"ERPNext Project {erpnext_project} is already linked to BP Project '{claimed_by}'."
         )
 
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     doc.erpnext_project = erpnext_project
     doc.save(ignore_permissions=True)
     doc.add_comment("Comment", f"Linked to ERPNext Project <b>{erpnext_project}</b>.")
@@ -60,7 +62,7 @@ def create_and_link_erpnext_project(project):
     ERPNext Project."""
     _check_permission(project, "BP Admin")
 
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     if doc.erpnext_project:
         frappe.throw(f"Already linked to ERPNext Project {doc.erpnext_project}.")
 
@@ -91,7 +93,7 @@ def create_and_link_erpnext_project(project):
 def unlink_erpnext_project(project):
     _check_permission(project, "BP Admin")
 
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     prev = doc.erpnext_project
     if not prev:
         return {"ok": True, "erpnext_project": None}
@@ -122,7 +124,7 @@ def search_erpnext_projects(txt=""):
         order_by="modified desc",
     )
     already_linked = set(frappe.get_all(
-        "BP Project", filters={"erpnext_project": ["is", "set"]}, pluck="erpnext_project"
+        PROJECT(), filters={"erpnext_project": ["is", "set"]}, pluck="erpnext_project"
     ))
     return [
         {
@@ -147,16 +149,16 @@ def _dedupe_project_name(base_name: str, so_name: str) -> str:
     name, then fall back to a counter for the pathological case where even
     that's taken."""
     name = (base_name or "").strip() or "Untitled Project"
-    if not frappe.db.exists("BP Project", {"project_name": name}):
+    if not frappe.db.exists(PROJECT(), {"project_name": name}):
         return name
 
     name = f"{name} — {so_name}"
-    if not frappe.db.exists("BP Project", {"project_name": name}):
+    if not frappe.db.exists(PROJECT(), {"project_name": name}):
         return name
 
     n = 2
     candidate = f"{name} ({n})"
-    while frappe.db.exists("BP Project", {"project_name": candidate}):
+    while frappe.db.exists(PROJECT(), {"project_name": candidate}):
         n += 1
         candidate = f"{name} ({n})"
     return candidate
@@ -176,7 +178,7 @@ def _derive_project_key(source_name: str) -> str:
 
     key = base
     n = 2
-    while frappe.db.exists("BP Project", {"key": key}):
+    while frappe.db.exists(PROJECT(), {"key": key}):
         key = f"{base}{n}"
         n += 1
     return key
@@ -263,7 +265,7 @@ def create_project_from_sales_order(sales_order, template=None, tasks_from_items
     link_result = create_and_link_erpnext_project(bp_project)
 
     # Stamp both sides.
-    frappe.db.set_value("BP Project", bp_project, "source_sales_order", so.name, update_modified=False)
+    frappe.db.set_value(PROJECT(), bp_project, "source_sales_order", so.name, update_modified=False)
     so.db_set("custom_bp_project", bp_project, update_modified=False)
 
     tasks_created = 0
@@ -325,7 +327,7 @@ def _create_bp_project_from_source(*, source_doctype, source_name, source_field,
     # Stamp both sides. frappe.db.set_value bypasses controller validation/
     # docstatus checks (same reason create_project_from_sales_order uses
     # so.db_set) — a submitted Quotation must still be stampable.
-    frappe.db.set_value("BP Project", bp_project, source_field, source_name, update_modified=False)
+    frappe.db.set_value(PROJECT(), bp_project, source_field, source_name, update_modified=False)
     frappe.db.set_value(source_doctype, source_name, "custom_bp_project", bp_project, update_modified=False)
 
     tasks_created = 0
@@ -1161,7 +1163,7 @@ def generate_invoice(project, period=None, tasks=None,
 
     expected_amount = _validated_expected_amount(amount)
 
-    docs = [frappe.get_doc("BP Project", p) for p in project_names]
+    docs = [frappe.get_doc(PROJECT(), p) for p in project_names]
     doc = docs[0]
 
     unlinked = [d.project_name for d in docs if not d.erpnext_project]
@@ -1359,7 +1361,7 @@ def generate_invoice(project, period=None, tasks=None,
 
     task_meta = {
         t.name: t for t in frappe.get_all(
-            "BP Task", filters={"name": ["in", [k[1] for k in by_task if k[1]]]},
+            TASK(), filters={"name": ["in", [k[1] for k in by_task if k[1]]]},
             fields=["name", "task_key", "title"],
         )
     }
@@ -1560,7 +1562,7 @@ def get_batch_invoice_candidates():
     accessible = get_accessible_projects()
 
     projects = frappe.get_all(
-        "BP Project",
+        PROJECT(),
         filters={"erpnext_project": ["is", "set"], "client": ["is", "set"]},
         fields=["name", "project_name", "client", "company", "currency",
                 "hourly_rate", "erpnext_project"],
@@ -1997,7 +1999,7 @@ def generate_expense_invoice(project):
     from batch_projects import access
     access.require_capability(project, "view_money")
 
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     if not doc.erpnext_project:
         frappe.throw(f"Link '{doc.project_name}' to an ERPNext Project before invoicing it.")
     if not doc.client:
@@ -2166,13 +2168,13 @@ def create_purchase_order_from_task(task, supplier, items):
     if not items:
         frappe.throw("Add at least one item.")
 
-    task_doc = frappe.get_doc("BP Task", task)
+    task_doc = frappe.get_doc(TASK(), task)
 
     from batch_projects import access
     access.require(task_doc.project, "Manager")
     access.require_capability(task_doc.project, "view_money")
 
-    doc = frappe.get_doc("BP Project", task_doc.project)
+    doc = frappe.get_doc(PROJECT(), task_doc.project)
     if not doc.erpnext_project:
         frappe.throw(f"Link '{doc.project_name}' to an ERPNext Project before creating a Purchase Order from it.")
 
@@ -2297,7 +2299,7 @@ def _erp_project_for(project: str) -> str:
     """BP Project -> its linked ERPNext Project, or the generic denial if
     either the BP Project or the link doesn't resolve — same "don't tell an
     attacker which part failed" posture as the tenancy check itself."""
-    erp_project = frappe.db.get_value("BP Project", project, "erpnext_project")
+    erp_project = frappe.db.get_value(PROJECT(), project, "erpnext_project")
     if not erp_project:
         frappe.throw(_DENIED)
     return erp_project
@@ -2537,7 +2539,7 @@ def get_erp_doc_summary(project, doctype, name):
         if task_names:
             task_meta = {
                 t["name"]: t for t in frappe.get_all(
-                    "BP Task", filters={"name": ["in", task_names]},
+                    TASK(), filters={"name": ["in", task_names]},
                     fields=["name", "task_key", "title"],
                 )
             }
@@ -2652,7 +2654,7 @@ def _projects_referencing(doctype: str, name: str) -> set:
     projects = set()
     field = _PROJECT_FIELD_FOR_DOCTYPE.get(doctype)
     if field:
-        projects |= set(frappe.get_all("BP Project", filters={field: name}, pluck="name"))
+        projects |= set(frappe.get_all(PROJECT(), filters={field: name}, pluck="name"))
     rows = frappe.db.sql(
         """SELECT DISTINCT t.project FROM `tabBP Task Reference` r
            JOIN `tabBP Task` t ON t.name = r.parent
@@ -2827,7 +2829,7 @@ def _auto_link_erpnext_project(project):
     insert failure are all logged and swallowed — the BP Project save
     succeeds regardless.
     """
-    doc = frappe.get_doc("BP Project", project)
+    doc = frappe.get_doc(PROJECT(), project)
     if not doc.company or doc.erpnext_project:
         return
 
@@ -2847,7 +2849,7 @@ def _auto_link_erpnext_project(project):
     # Write the link back. Uses frappe.db.set_value (not doc.save()) so the
     # recursion guard in bp_project.py.on_update catches the resulting
     # on_update fire and bails immediately.
-    frappe.db.set_value("BP Project", project, "erpnext_project", erp_doc.name)
+    frappe.db.set_value(PROJECT(), project, "erpnext_project", erp_doc.name)
     doc.add_comment(
         "Comment",
         f"Auto-linked to ERPNext Project <b>{erp_doc.name}</b>.",
@@ -2862,7 +2864,7 @@ def _sync_to_erpnext_project(bp_project_name):
     No @frappe.whitelist(), no gateway check — the caller already verified
     the user had permission to save the BP Project.
     """
-    bp = frappe.get_doc("BP Project", bp_project_name)
+    bp = frappe.get_doc(PROJECT(), bp_project_name)
     if not bp.erpnext_project:
         return
 
@@ -2905,7 +2907,7 @@ def reconcile_erpnext_sync():
     try:
         # ── Pass 1: Auto-link un-linked projects with a company ──────
         unlinked = frappe.db.get_all(
-            "BP Project",
+            PROJECT(),
             filters={
                 "erpnext_project": ["is", "not set"],
                 "company": ["is", "set"],
@@ -2916,7 +2918,7 @@ def reconcile_erpnext_sync():
 
         for bp_name in unlinked:
             try:
-                bp = frappe.get_doc("BP Project", bp_name)
+                bp = frappe.get_doc(PROJECT(), bp_name)
                 # Honour opt-out flag (field may not exist yet — default
                 # True so the feature works until the migration ships).
                 if not getattr(bp, "auto_create_erpnext_project", True):
@@ -2928,14 +2930,14 @@ def reconcile_erpnext_sync():
                 frappe.log_error(
                     title="Reconcile auto-link failed",
                     message=frappe.get_traceback(),
-                    reference_doctype="BP Project",
+                    reference_doctype=PROJECT(),
                     reference_name=bp_name,
                 )
                 stats["failed"] += 1
 
         # ── Pass 2: Sync status / date drift on linked projects ───
         linked = frappe.db.get_all(
-            "BP Project",
+            PROJECT(),
             filters={"erpnext_project": ["is", "set"]},
             fields=["name", "status", "target_end_date", "erpnext_project"],
             limit_page_length=200,
@@ -2986,7 +2988,7 @@ def reconcile_erpnext_sync():
                 frappe.log_error(
                     title="Reconcile sync failed",
                     message=frappe.get_traceback(),
-                    reference_doctype="BP Project",
+                    reference_doctype=PROJECT(),
                     reference_name=bp_row["name"],
                 )
                 stats["failed"] += 1
