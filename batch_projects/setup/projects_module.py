@@ -59,6 +59,16 @@ _EXTRA_ITEMS = [
         "url": "/desk/task/view/tree",
         "icon": "list-tree",
     },
+    {
+        "label": "Project WBS",
+        "type": "Link",
+        "link_type": "URL",
+        # Project-level hierarchy. Unlike Task, native Project is NOT a nested
+        # set, so there is no tree view for it — this report renders
+        # custom_parent_project as an indented breakdown instead.
+        "url": "/desk/query-report/Project WBS",
+        "icon": "organization",
+    },
 ]
 
 _SIDEBAR_NAME = "Projects"
