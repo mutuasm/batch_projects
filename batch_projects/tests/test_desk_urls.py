@@ -88,11 +88,18 @@ class TestInviteRouteSurvives(UnitTestCase):
         self.assertIn("/invite/<path:app_path>", routes)
 
     def test_no_spa_routes_are_declared(self):
+        """`/workspace` was the SPA shell and has no server-rendered
+        replacement, so a rule naming it is always a future 404.
+
+        /share and /intake were removed with the SPA and later restored as
+        server-rendered pages (www/share.py, www/intake.py), so they are no
+        longer offenders — this used to reject them too. test_public_routes
+        covers what they must now do."""
         rules = frappe.get_hooks("website_route_rules", app_name="batch_projects") or []
         offenders = [
             r["from_route"]
             for r in rules
-            if any(dead in r.get("from_route", "") for dead in ("/workspace", "/share", "/intake"))
+            if "/workspace" in r.get("from_route", "")
         ]
         self.assertEqual(offenders, [], f"routes for the removed SPA: {offenders}")
 

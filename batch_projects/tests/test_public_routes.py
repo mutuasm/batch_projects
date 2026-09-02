@@ -20,7 +20,6 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from frappe.utils import get_html_for_route
 
 from batch_projects import hooks
 
@@ -93,25 +92,44 @@ class _PublicPage(IntegrationTestCase):
         doc.insert(ignore_permissions=True)
         return token
 
-    def _render(self, route):
-        """Render as Guest — these pages exist for people with no account."""
+    def _render(self, page, app_path):
+        """Render a page's body exactly as its route would, minus the base.
+
+        Not get_html_for_route: templates/web.html pulls in the website asset
+        bundle and CI installs with --skip-assets, so a full-page render dies
+        in frappe's include_style() before reaching any of this app's markup.
+        The body is an include precisely so it can be rendered on its own —
+        this runs the real get_context and the real template, escaping and all.
+
+        As Guest, because that is who these pages are for.
+        """
+        import importlib
+
+        module = importlib.import_module(f"batch_projects.www.{page}")
+        previous_form_dict, previous_user = frappe.form_dict, frappe.session.user
+        frappe.form_dict = frappe._dict(app_path=app_path)
         frappe.set_user("Guest")
         try:
-            return get_html_for_route(route)
+            context = frappe._dict()
+            module.get_context(context)
+            return frappe.render_template(
+                f"templates/includes/{page}_content.html", context
+            )
         finally:
-            frappe.set_user("Administrator")
+            frappe.form_dict = previous_form_dict
+            frappe.set_user(previous_user)
 
 
 class TestSharePage(_PublicPage):
     def test_a_shared_task_renders_its_title(self):
         task = self._task("Ship the thing")
-        html = self._render(f"/share/{self._link('task', task=task.name)}")
+        html = self._render("share", self._link("task", task=task.name))
         self.assertIn("Ship the thing", html)
         self.assertIn("Read-only", html)
 
     def test_a_shared_board_renders_its_columns(self):
         self._task("On the board")
-        html = self._render(f"/share/{self._link('board')}")
+        html = self._render("share", self._link("board"))
         self.assertIn("On the board", html)
 
     def test_the_comment_box_appears_only_when_the_link_permits_it(self):
@@ -120,12 +138,10 @@ class TestSharePage(_PublicPage):
         act on."""
         task = self._task("Commentable")
 
-        view_only = self._render(f"/share/{self._link('task', 'view', task.name)}")
+        view_only = self._render("share", self._link("task", "view", task.name))
         self.assertNotIn("bp-comment-send", view_only)
 
-        commentable = self._render(
-            f"/share/{self._link('task', 'comment', task.name)}"
-        )
+        commentable = self._render("share", self._link("task", "comment", task.name))
         self.assertIn("bp-comment-send", commentable)
 
     def test_member_authored_markup_is_escaped_not_rendered(self):
@@ -140,7 +156,7 @@ class TestSharePage(_PublicPage):
         stored verbatim, so it isolates the one layer this app owns: Jinja
         autoescaping in the template."""
         task = self._task("<b>bold</b>")
-        html = self._render(f"/share/{self._link('task', task=task.name)}")
+        html = self._render("share", self._link("task", task=task.name))
         self.assertIn("&lt;b&gt;bold&lt;/b&gt;", html)
         self.assertNotIn("<b>bold</b>", html)
 
@@ -148,18 +164,18 @@ class TestSharePage(_PublicPage):
         """Belt and braces over the layer above: whatever the storage filter
         does or stops doing, the rendered page must carry no injected script."""
         task = self._task("<script>alert('xss')</script>")
-        html = self._render(f"/share/{self._link('task', task=task.name)}")
+        html = self._render("share", self._link("task", task=task.name))
         self.assertNotIn("alert('xss')", html)
 
     def test_an_unknown_token_explains_itself(self):
-        html = self._render("/share/definitely-not-a-token")
+        html = self._render("share", "definitely-not-a-token")
         self.assertIn("Ask whoever shared this", html)
 
     def test_a_revoked_link_is_refused(self):
         task = self._task("Revoked")
         token = self._link("task", task=task.name)
         frappe.db.set_value("BP Share Link", {"token": token}, "revoked", 1)
-        html = self._render(f"/share/{token}")
+        html = self._render("share", token)
         self.assertNotIn("Revoked", html)
         self.assertIn("Ask whoever shared this", html)
 
@@ -188,7 +204,7 @@ class TestIntakePage(_PublicPage):
 
     def test_an_active_form_renders_its_fields(self):
         form = self._form()
-        html = self._render(f"/intake/{form.name}")
+        html = self._render("intake", form.name)
         self.assertIn("Request something", html)
         self.assertIn("What do you need", html)
         self.assertIn("Details", html)
@@ -198,18 +214,18 @@ class TestIntakePage(_PublicPage):
         """submit_intake_form reads `values` by label, not fieldname. Keying
         the inputs any other way drops every answer and still reports success."""
         form = self._form(fields=[{"label": "Your email", "type": "email"}])
-        html = self._render(f"/intake/{form.name}")
+        html = self._render("intake", form.name)
         self.assertIn('data-label="Your email"', html)
         self.assertIn('type="email"', html)
 
     def test_an_unknown_field_type_still_renders_an_input(self):
         """The type vocabulary is not constrained anywhere server-side."""
         form = self._form(fields=[{"label": "Odd one", "type": "quantum"}])
-        html = self._render(f"/intake/{form.name}")
+        html = self._render("intake", form.name)
         self.assertIn('data-label="Odd one"', html)
         self.assertIn('type="text"', html)
 
     def test_an_inactive_form_is_refused(self):
         form = self._form(active=0)
-        html = self._render(f"/intake/{form.name}")
+        html = self._render("intake", form.name)
         self.assertNotIn('data-label="What do you need"', html)

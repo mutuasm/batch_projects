@@ -1,0 +1,163 @@
+{# Body of the public /share/<token> page. Rendered by www/share.html.
+   Escaping notes are in www/share.py — frappe's website Jinja does NOT
+   autoescape, so every member-authored value below carries `| e`. #}
+{#
+  Read-only rendering of a share token's payload. Two shapes come back from
+  get_shared: a whole board (columns of tasks) or a single task with its
+  subtasks and comments.
+
+  EVERY interpolation of member-authored text carries `| e`, explicitly.
+  Frappe's website Jinja environment does NOT autoescape, so a bare {{ value }}
+  emits raw HTML — verified, not assumed: an earlier revision of this template
+  rendered a task titled `<b>bold</b>` as actual bold markup. This page shows
+  member-authored text to anonymous visitors, which is the direction stored XSS
+  travels, so the escaping is the control that matters here.
+
+  Frappe's own XSS filter strips <script> from Data fields at write time, but
+  that is a second layer and not this template's to rely on: it does not cover
+  every field, and it is not what makes THIS page safe.
+#}
+
+{% macro task_card(t) %}
+<div class="bp-card">
+  <div class="bp-card-title">{{ t.title | e }}</div>
+  <div class="bp-meta">
+    {% if t.task_key %}<span class="bp-key">{{ t.task_key | e }}</span>{% endif %}
+    {% if t.status %}
+      <span class="bp-pill" style="background: {{ t.status_color | e or '#9FA6AD' }}">{{ t.status | e }}</span>
+    {% endif %}
+    {% if t.priority %}<span class="bp-dim">{{ t.priority | e }}</span>{% endif %}
+    {% if t.due_date %}<span class="bp-dim">{{ _("Due") }} {{ t.due_date | e }}</span>{% endif %}
+  </div>
+  {% if t.assignees %}
+    <div class="bp-dim bp-assignees">
+      {% for a in t.assignees %}{{ (a.full_name or a.user or a) | e }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<style>
+  .bp-wrap { max-width: 1100px; margin: 0 auto; }
+  .bp-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+  .bp-badge { font-size: .75rem; padding: .1rem .5rem; border-radius: 999px;
+              background: #f0f0f2; color: #55575c; }
+  .bp-cols { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: .5rem; }
+  .bp-col { min-width: 260px; flex: 0 0 260px; }
+  .bp-col-head { font-weight: 600; font-size: .85rem; margin-bottom: .5rem;
+                 display: flex; justify-content: space-between; }
+  .bp-card { border: 1px solid #e6e8eb; border-radius: 8px; padding: .6rem .7rem;
+             margin-bottom: .5rem; background: #fff; }
+  .bp-card-title { font-weight: 500; }
+  .bp-meta { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
+             margin-top: .35rem; font-size: .75rem; }
+  .bp-pill { color: #fff; border-radius: 999px; padding: .05rem .45rem; font-size: .7rem; }
+  .bp-key { font-family: ui-monospace, monospace; font-size: .72rem; color: #7c7f85; }
+  .bp-dim { color: #7c7f85; font-size: .75rem; }
+  .bp-assignees { margin-top: .3rem; }
+  .bp-desc { white-space: pre-wrap; margin-top: .75rem; }
+  .bp-comment { border-top: 1px solid #eee; padding: .6rem 0; }
+  .bp-empty { color: #9aa0a6; font-size: .8rem; padding: .3rem 0; }
+</style>
+
+<div class="bp-wrap py-8">
+  {% if error %}
+    <h2>{{ _("Shared link") }}</h2>
+    <div class="alert alert-warning mt-4" role="alert">{{ error | e }}</div>
+    <p class="text-muted mt-3">{{ _("Ask whoever shared this to send a fresh link.") }}</p>
+
+  {% else %}
+    {% set header = data.project or {} %}
+    <div class="bp-head">
+      <h2 style="margin:0">{{ (header.project_name or _("Shared")) | e }}</h2>
+      <span class="bp-badge">{{ _("Read-only") }}</span>
+      {% if data.label %}<span class="bp-dim">{{ data.label | e }}</span>{% endif %}
+    </div>
+
+    {# ── single task ───────────────────────────────────────────────────── #}
+    {% if data.scope == "task" and data.task %}
+      {% set t = data.task %}
+      <h3 class="mt-4" style="margin-bottom:.3rem">{{ t.title | e }}</h3>
+      <div class="bp-meta">
+        {% if t.task_key %}<span class="bp-key">{{ t.task_key | e }}</span>{% endif %}
+        {% if t.status %}
+          <span class="bp-pill" style="background: {{ t.status_color | e or '#9FA6AD' }}">{{ t.status | e }}</span>
+        {% endif %}
+        {% if t.priority %}<span class="bp-dim">{{ t.priority | e }}</span>{% endif %}
+        {% if t.due_date %}<span class="bp-dim">{{ _("Due") }} {{ t.due_date | e }}</span>{% endif %}
+      </div>
+
+      {% if t.description %}<div class="bp-desc">{{ t.description | e }}</div>{% endif %}
+
+      {% if t.subtasks %}
+        <h5 class="mt-4">{{ _("Subtasks") }}</h5>
+        {% for s in t.subtasks %}{{ task_card(s) }}{% endfor %}
+      {% endif %}
+
+      <h5 class="mt-4">{{ _("Comments") }}</h5>
+      {% if t.comments %}
+        {% for c in t.comments %}
+          <div class="bp-comment">
+            <div class="bp-dim">{{ (c.full_name or c.guest_name or c.user) | e }} · {{ c.creation | e }}</div>
+            <div style="white-space: pre-wrap">{{ c.comment_text | e }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="bp-empty">{{ _("No comments yet.") }}</div>
+      {% endif %}
+
+      {% if can_comment %}
+        <div class="mt-4" style="max-width: 560px;">
+          <input class="form-control mb-2" id="bp-guest-name"
+                 placeholder="{{ _('Your name') }}" maxlength="140">
+          <textarea class="form-control mb-2" id="bp-comment" rows="3"
+                    placeholder="{{ _('Add a comment') }}"></textarea>
+          <button class="btn btn-primary btn-sm" id="bp-comment-send">{{ _("Comment") }}</button>
+          <span class="bp-dim ml-2" id="bp-comment-msg"></span>
+        </div>
+        <script>
+        // Posts through the existing allow_guest endpoint rather than a form
+        // POST, so frappe's own CSRF handling applies and the server keeps its
+        // access_level and throttling checks. The button is only rendered when
+        // the API already said commenting applies to this link.
+        document.getElementById("bp-comment-send").addEventListener("click", function () {
+            const btn = this;
+            const msg = document.getElementById("bp-comment-msg");
+            const text = document.getElementById("bp-comment").value.trim();
+            if (!text) { msg.textContent = "{{ _('Write something first.') }}"; return; }
+            btn.disabled = true;
+            msg.textContent = "{{ _('Sending…') }}";
+            frappe.call({
+                method: "batch_projects.api.sharing.add_guest_comment",
+                args: {
+                    token: {{ token | tojson }},
+                    comment_text: text,
+                    guest_name: document.getElementById("bp-guest-name").value.trim(),
+                },
+            }).then(function () {
+                window.location.reload();
+            }).catch(function () {
+                btn.disabled = false;
+                msg.textContent = "{{ _('Could not post that comment.') }}";
+            });
+        });
+        </script>
+      {% endif %}
+
+    {# ── whole board ──────────────────────────────────────────────────── #}
+    {% else %}
+      <div class="bp-cols mt-4">
+        {% for col in data.columns %}
+          {% set items = (data.board or {}).get(col) or [] %}
+          <div class="bp-col">
+            <div class="bp-col-head">
+              <span>{{ col | e }}</span><span class="bp-dim">{{ items | length }}</span>
+            </div>
+            {% for t in items %}{{ task_card(t) }}{% endfor %}
+            {% if not items %}<div class="bp-empty">{{ _("Nothing here.") }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
