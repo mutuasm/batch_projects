@@ -36,24 +36,28 @@ from . import __version__ as app_version
 # app_include_js = ["/assets/batch_projects/js/batch_projects.js"]
 
 # The Vue SPA that served /workspace, /share/<token> and /intake/<token> has
-# been removed; the desk is the UI now. One public route survives, because
-# losing it would break a flow nobody chose to drop:
+# been removed; the desk is the UI now. Its three PUBLIC routes are all
+# server-rendered again, because each one is a URL already in someone else's
+# hands — an email, a client's bookmark, a published form — and the people
+# holding those links have no way to recover from a 404:
 #
-#   /invite/<token>  server-rendered accept page (www/invite.py). Without it
-#                    every invitation email points at a 404 and there is no way
-#                    to join a project at all.
+#   /invite/<token>  accept page (www/invite.py). Without it every invitation
+#                    email dead-ends and there is no way to join a project.
+#   /share/<token>   read-only board or task (www/share.py). api.sharing
+#                    ._share_url still mints this path, so links created after
+#                    the SPA was dropped were born broken too.
+#   /intake/<name>   public request form (www/intake.py). An intake form exists
+#                    to be handed outside the workspace; unreachable, it just
+#                    silently stops inbound work.
+#
+# All three reuse the existing allow_guest endpoints unchanged — only the
+# rendering was ever missing. The desk-side surfaces (BP Share Link, BP Intake
+# Form) were never touched.
 website_route_rules = [
     {"from_route": "/invite/<path:app_path>", "to_route": "invite"},
+    {"from_route": "/share/<path:app_path>", "to_route": "share"},
+    {"from_route": "/intake/<path:app_path>", "to_route": "intake"},
 ]
-
-#
-# Removing /share and /intake is an outward-facing change, not just a cleanup —
-# those were PUBLIC, unauthenticated URLs. Any share link already handed to a
-# client, and any published intake form, stops resolving. The BP Share Link and
-# BP Intake Form doctypes and their whitelisted endpoints are left intact, so
-# the data and the API are still there; what is gone is the page that rendered
-# them. Rebuilding either on the desk would be new work, deliberately not done
-# here.
 
 # Fixtures for export — roles must match what board.py actually uses
 fixtures = [
